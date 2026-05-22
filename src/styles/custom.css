@@ -1,0 +1,40 @@
+.dashboard-stats {
+  margin-bottom: 30px;
+}
+
+.weather-widget {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  padding: 8px 15px;
+  border-radius: 25px;
+  color: white;
+}
+
+.table-hover tbody tr:hover {
+  background-color: #f8f9fa;
+  cursor: pointer;
+}
+
+.modal-content {
+  border-radius: 15px;
+}
+
+.btn-icon {
+  margin-right: 8px;
+}
+
+.status-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-paid {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
