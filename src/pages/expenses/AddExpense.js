@@ -10,6 +10,8 @@ import {
   Spinner,
   OverlayTrigger,
   Tooltip,
+  Tab,
+  Nav,
 } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import {
@@ -19,9 +21,14 @@ import {
   FaPercent,
   FaTag,
   FaCheckCircle,
-  FaUser,
   FaInfoCircle,
   FaExclamationTriangle,
+  FaTimes,
+  FaCalendarAlt,
+  FaFileInvoice,
+  FaCreditCard,
+  FaUser,
+  FaBuilding,
 } from "react-icons/fa";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -31,6 +38,7 @@ const AddExpense = () => {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState({});
+  const [activeTab, setActiveTab] = useState("expense");
 
   const [formData, setFormData] = useState({
     category: "",
@@ -42,6 +50,7 @@ const AddExpense = () => {
     gst: "0",
     payment_status: "Paid",
     created_by: 1,
+    notes: "",
   });
 
   const validateForm = () => {
@@ -175,8 +184,7 @@ const AddExpense = () => {
       const response = await addExpense(expenseData);
       console.log("Add expense response:", response);
 
-      // ✅ SUCCESS TOAST MESSAGE
-      toast.success(`✅ Expense   added successfully! 🎉`, {
+      toast.success(`✅ Expense added successfully! 🎉`, {
         position: "top-right",
         autoClose: 3000,
         hideProgressBar: false,
@@ -229,8 +237,11 @@ const AddExpense = () => {
   };
 
   return (
-    <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
-      {/* React Toastify Container */}
+    <Container
+      fluid
+      className="px-4 py-3"
+      style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+    >
       <ToastContainer
         position="top-right"
         autoClose={3000}
@@ -245,109 +256,160 @@ const AddExpense = () => {
         transition={Bounce}
       />
 
-      {/* Header */}
-      <div className="bg-secondary text-white rounded-3 p-4 mb-4 shadow">
-        <div className="d-flex justify-content-between align-items-center">
-          <div>
-            <h2 className="fw-bold mb-1">
-              <FaUser className="me-2" /> Add New Expense
-            </h2>
-            <p className="mb-0 opacity-75">Fill in the details to add a new expense</p>
-          </div>
-          <Button
-            variant="light"
-            onClick={handleGoBack}
-            className="rounded-pill px-4"
-          >
-            <FaArrowLeft className="me-2" /> Back to Expenses
-          </Button>
-        </div>
-      </div>
-
       <Form onSubmit={handleSubmit}>
-        <Row className="g-4">
-          {/* Left Column - Expense Details */}
-          <Col lg={6}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaMoneyBillWave className="me-2 text-secondary" /> Expense Details
-                </h6>
-                <hr />
+        <Card className="border-0 shadow-sm rounded-3">
+          <Card.Header className="bg-white border-bottom-0 pt-4 px-4">
+            <Nav
+              variant="tabs"
+              activeKey={activeTab}
+              onSelect={(k) => setActiveTab(k)}
+            >
+              <Nav.Item>
+                <Nav.Link eventKey="expense" className="fw-semibold">
+                  <FaMoneyBillWave className="me-2" /> Expense Details
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="tax" className="fw-semibold">
+                  <FaPercent className="me-2" /> Tax Information
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="payment" className="fw-semibold">
+                  <FaCreditCard className="me-2" /> Payment Information
+                </Nav.Link>
+              </Nav.Item>
+            </Nav>
+          </Card.Header>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Category *</Form.Label>
-                  <div className="d-flex align-items-center">
-                    <Form.Select
-                      name="category"
-                      value={formData.category}
-                      onChange={handleChange}
-                      isInvalid={!!formErrors.category}
-                      className="flex-grow-1"
-                    >
-                      <option value="">Select Category</option>
-                      <option value="Rent">Rent</option>
-                      <option value="Utilities">Utilities</option>
-                      <option value="Salary">Salary</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Travel">Travel</option>
-                      <option value="Office Supplies">Office Supplies</option>
-                      <option value="Maintenance">Maintenance</option>
-                      <option value="Insurance">Insurance</option>
-                      <option value="Transport">Transport</option>
-                      <option value="Legal">Legal</option>
-                      <option value="Software">Software</option>
-                      <option value="Training">Training</option>
-                      <option value="Other">Other</option>
-                    </Form.Select>
-                    {getValidationIcon(formData.category, formErrors.category)}
-                  </div>
-                  {formErrors.category && (
-                    <Form.Text className="text-danger">{formErrors.category}</Form.Text>
-                  )}
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Expense Date *</Form.Label>
-                  <div className="d-flex align-items-center">
-                    <Form.Control
-                      type="date"
-                      name="expense_date"
-                      value={formData.expense_date}
-                      onChange={handleChange}
-                      isInvalid={!!formErrors.expense_date}
-                      max={new Date().toISOString().split('T')[0]}
-                      className="flex-grow-1"
-                    />
-                    {getValidationIcon(formData.expense_date, formErrors.expense_date)}
-                  </div>
-                  {formErrors.expense_date && (
-                    <Form.Text className="text-danger">{formErrors.expense_date}</Form.Text>
-                  )}
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Description</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={3}
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    placeholder="Describe the expense (optional)"
-                  />
-                  <Form.Text className="text-muted">
-                    Provide additional details about this expense
-                  </Form.Text>
-                </Form.Group>
-
-                <h6 className="fw-bold mb-3 mt-4">
-                  <FaPercent className="me-2 text-secondary" /> Tax Information
-                </h6>
-                <hr />
-
+          <Card.Body className="p-4">
+            <Tab.Content>
+              {/* Expense Details Tab */}
+              <Tab.Pane eventKey="expense" active={activeTab === "expense"}>
                 <Row>
-                  <Col md={6}>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaTag className="me-2" /> Basic Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Category *</Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Select
+                          name="category"
+                          value={formData.category}
+                          onChange={handleChange}
+                          isInvalid={!!formErrors.category}
+                          className="flex-grow-1"
+                        >
+                          <option value="">Select Category</option>
+                          <option value="Rent">Rent</option>
+                          <option value="Utilities">Utilities</option>
+                          <option value="Salary">Salary</option>
+                          <option value="Marketing">Marketing</option>
+                          <option value="Travel">Travel</option>
+                          <option value="Office Supplies">Office Supplies</option>
+                          <option value="Maintenance">Maintenance</option>
+                          <option value="Insurance">Insurance</option>
+                          <option value="Transport">Transport</option>
+                          <option value="Legal">Legal</option>
+                          <option value="Software">Software</option>
+                          <option value="Training">Training</option>
+                          <option value="Other">Other</option>
+                        </Form.Select>
+                        {getValidationIcon(formData.category, formErrors.category)}
+                      </div>
+                      {formErrors.category && (
+                        <Form.Text className="text-danger">{formErrors.category}</Form.Text>
+                      )}
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>
+                        <FaCalendarAlt className="me-1" /> Expense Date *
+                      </Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Control
+                          type="date"
+                          name="expense_date"
+                          value={formData.expense_date}
+                          onChange={handleChange}
+                          isInvalid={!!formErrors.expense_date}
+                          max={new Date().toISOString().split('T')[0]}
+                          className="flex-grow-1"
+                        />
+                        {getValidationIcon(formData.expense_date, formErrors.expense_date)}
+                      </div>
+                      {formErrors.expense_date && (
+                        <Form.Text className="text-danger">{formErrors.expense_date}</Form.Text>
+                      )}
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Description</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={4}
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                        placeholder="Describe the expense (optional)"
+                      />
+                      <Form.Text className="text-muted">
+                        Provide additional details about this expense
+                      </Form.Text>
+                    </Form.Group>
+                  </Col>
+
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaBuilding className="me-2" /> Additional Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Notes</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={4}
+                        name="notes"
+                        value={formData.notes}
+                        onChange={handleChange}
+                        placeholder="Any additional notes about this expense..."
+                      />
+                      <Form.Text className="text-muted">
+                        Add any extra information or remarks about this expense
+                      </Form.Text>
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>
+                        <FaUser className="me-1" /> Created By
+                      </Form.Label>
+                      <Form.Control
+                        type="text"
+                        value="Admin User"
+                        disabled
+                        className="bg-light"
+                      />
+                      <Form.Text className="text-muted">
+                        This will be automatically populated from your profile
+                      </Form.Text>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Tab.Pane>
+
+              {/* Tax Information Tab */}
+              <Tab.Pane eventKey="tax" active={activeTab === "tax"}>
+                <Row>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaPercent className="me-2" /> Tax Calculation
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
                     <Form.Group className="mb-3">
                       <Form.Label>Amount (₹) *</Form.Label>
                       <div className="d-flex align-items-center">
@@ -368,8 +430,7 @@ const AddExpense = () => {
                         <Form.Text className="text-danger">{formErrors.amount}</Form.Text>
                       )}
                     </Form.Group>
-                  </Col>
-                  <Col md={6}>
+
                     <Form.Group className="mb-3">
                       <Form.Label>GST Rate (%)</Form.Label>
                       <Form.Select
@@ -385,10 +446,13 @@ const AddExpense = () => {
                       </Form.Select>
                     </Form.Group>
                   </Col>
-                </Row>
 
-                <Row>
-                  <Col md={6}>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaFileInvoice className="me-2" /> Tax Summary
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
                     <Form.Group className="mb-3">
                       <Form.Label>Tax Amount (₹)</Form.Label>
                       <Form.Control
@@ -400,8 +464,7 @@ const AddExpense = () => {
                         className="bg-light"
                       />
                     </Form.Group>
-                  </Col>
-                  <Col md={6}>
+
                     <Form.Group className="mb-3">
                       <Form.Label>Total Amount (₹)</Form.Label>
                       <Form.Control
@@ -413,114 +476,150 @@ const AddExpense = () => {
                         className="bg-light text-primary fw-bold"
                       />
                     </Form.Group>
+
+                    {parseFloat(formData.gst) > 0 && formData.amount && parseFloat(formData.amount) > 0 && (
+                      <Alert variant="info" className="mt-3 rounded-3">
+                        <small>
+                          <strong>Tax Calculation Summary:</strong>
+                          <br />• Amount: ₹{parseFloat(formData.amount || 0).toLocaleString()}
+                          <br />• GST ({formData.gst}%): ₹{(
+                            (parseFloat(formData.amount) * parseFloat(formData.gst)) / 100
+                          ).toLocaleString()}
+                          <br />•{" "}
+                          <strong>
+                            Total Amount: ₹{(
+                              parseFloat(formData.amount) +
+                              (parseFloat(formData.amount) * parseFloat(formData.gst)) / 100
+                            ).toLocaleString()}
+                          </strong>
+                        </small>
+                      </Alert>
+                    )}
                   </Col>
                 </Row>
-              </Card.Body>
-            </Card>
-          </Col>
+              </Tab.Pane>
 
-          {/* Right Column - Payment & Additional Info */}
-          <Col lg={6}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaCheckCircle className="me-2 text-secondary" /> Payment Information
-                </h6>
-                <hr />
+              {/* Payment Information Tab */}
+              <Tab.Pane eventKey="payment" active={activeTab === "payment"}>
+                <Row>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaCreditCard className="me-2" /> Payment Details
+                    </h6>
+                    <hr className="mt-0 mb-3" />
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Payment Status</Form.Label>
-                  <Form.Select
-                    name="payment_status"
-                    value={formData.payment_status}
-                    onChange={handleChange}
-                  >
-                    <option value="Paid">Paid</option>
-                    <option value="Pending">Pending</option>
-                  </Form.Select>
-                </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Payment Status</Form.Label>
+                      <Form.Select
+                        name="payment_status"
+                        value={formData.payment_status}
+                        onChange={handleChange}
+                      >
+                        <option value="Paid">Paid</option>
+                        <option value="Pending">Pending</option>
+                      </Form.Select>
+                      <Form.Text className="text-muted">
+                        Select whether this expense has been paid or pending
+                      </Form.Text>
+                    </Form.Group>
+                  </Col>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Created By</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value="Admin User"
-                    disabled
-                    className="bg-light"
-                  />
-                  <Form.Text className="text-muted">
-                    This will be automatically populated from your profile
-                  </Form.Text>
-                </Form.Group>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaCheckCircle className="me-2" /> Confirmation
+                    </h6>
+                    <hr className="mt-0 mb-3" />
 
-                {/* Tax Summary Alert */}
-                {parseFloat(formData.gst) > 0 && formData.amount && parseFloat(formData.amount) > 0 && (
-                  <Alert variant="info" className="mt-3 rounded-3">
-                    <small>
-                      <strong>Tax Calculation Summary:</strong>
-                      <br />• Amount: ₹{parseFloat(formData.amount || 0).toLocaleString()}
-                      <br />• GST ({formData.gst}%): ₹{(
-                        (parseFloat(formData.amount) * parseFloat(formData.gst)) / 100
-                      ).toLocaleString()}
-                      <br />•{" "}
-                      <strong>
-                        Total Amount: ₹{(
-                          parseFloat(formData.amount) +
-                          (parseFloat(formData.amount) * parseFloat(formData.gst)) / 100
-                        ).toLocaleString()}
-                      </strong>
-                    </small>
-                  </Alert>
+                    <Alert variant="success" className="rounded-3">
+                      <small>
+                        <strong>Ready to Submit?</strong>
+                        <br />
+                        Please review all the expense details before submitting.
+                        <br />
+                        You can edit the expense later if needed.
+                      </small>
+                    </Alert>
+                  </Col>
+                </Row>
+              </Tab.Pane>
+            </Tab.Content>
+          </Card.Body>
+
+          {/* Action Buttons inside Card Footer */}
+          <Card.Footer className="bg-white border-top-0 pb-4 px-4">
+            <div className="d-flex justify-content-between gap-3">
+              <Button
+                onClick={handleGoBack}
+                style={{
+                  backgroundColor: "#6c757d",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#fff",
+                }}
+              >
+                <FaTimes size={14} /> Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  backgroundColor: "rgb(30, 58, 111)",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
+                }}
+              >
+                {submitting ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <FaSave size={14} /> Submit Expense
+                  </>
                 )}
-
-                <h6 className="fw-bold mb-3 mt-4">
-                  <FaTag className="me-2 text-secondary" /> Additional Notes
-                </h6>
-                <hr />
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Notes (Optional)</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={3}
-                    name="notes"
-                    placeholder="Any additional notes about this expense..."
-                  />
-                  <Form.Text className="text-muted">
-                    Add any extra information or remarks about this expense
-                  </Form.Text>
-                </Form.Group>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-
-        {/* Action Buttons */}
-        <div className="d-flex justify-content-end gap-3 mt-4">
-          <Button
-            variant="secondary"
-            type="submit"
-            disabled={submitting}
-            className="rounded-pill px-4"
-            style={{ backgroundColor: "#6c757d", border: "none" }}
-          >
-            {submitting ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <FaSave className="me-2" /> Submit
-              </>
-            )}
-          </Button>
-        </div>
+              </Button>
+            </div>
+          </Card.Footer>
+        </Card>
       </Form>
 
       <style>{`
+        .nav-tabs {
+          border-bottom: 2px solid #e9ecef;
+        }
+        .nav-tabs .nav-link {
+          border: none;
+          color: #6c757d;
+          padding: 12px 20px;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+        .nav-tabs .nav-link:hover {
+          color: rgb(30, 58, 111);
+          background: transparent;
+        }
+        .nav-tabs .nav-link.active {
+          color: rgb(30, 58, 111);
+          background: transparent;
+          border-bottom: 2px solid rgb(30, 58, 111);
+        }
         .rounded-3 {
-          border-radius: 0.75rem !important;
+          border-radius: 12px !important;
         }
       `}</style>
     </Container>

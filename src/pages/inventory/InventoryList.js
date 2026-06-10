@@ -4,14 +4,12 @@ import {
   Card,
   Table,
   Button,
-  Badge,
   Form,
   Row,
   Col,
   InputGroup,
   Alert,
   Spinner,
-  Modal,
 } from "react-bootstrap";
 import {
   FaPlus,
@@ -22,11 +20,9 @@ import {
   FaBoxes,
   FaFilter,
   FaTimes,
-  FaHome,
   FaRupeeSign,
   FaPercent,
   FaExclamationTriangle,
-  FaSignOutAlt,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import {
@@ -34,45 +30,30 @@ import {
   deleteProduct,
   getStockAlerts,
 } from "../../api/tenant/inventory.api";
+import { ToastContainer, toast, Bounce } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import Swal from "sweetalert2";
 
-// Toast helper functions for delete only
-const showDeleteSuccessToast = (title, timer = 2000) => {
-  const Toast = Swal.mixin({
-    toast: true,
-    position: "top-end",
-    showConfirmButton: false,
-    timer: timer,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-      toast.addEventListener("mouseenter", Swal.stopTimer);
-      toast.addEventListener("mouseleave", Swal.resumeTimer);
-    },
-  });
-  
-  Toast.fire({
-    icon: "success",
-    title: title,
-  });
+// Stock status color mapping
+const stockStatusConfig = {
+  inStock: { bg: "#ECFDF3", color: "#027A48", label: "In Stock" },
+  lowStock: { bg: "#FEF6D7", color: "#FED229", label: "Low Stock" },
+  outOfStock: { bg: "#FFDCE2", color: "#F94765", label: "Out of Stock" },
 };
 
-const showDeleteErrorToast = (title, timer = 4000) => {
-  const Toast = Swal.mixin({
-    toast: true,
-    position: "top-end",
-    showConfirmButton: false,
-    timer: timer,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-      toast.addEventListener("mouseenter", Swal.stopTimer);
-      toast.addEventListener("mouseleave", Swal.resumeTimer);
-    },
-  });
-  
-  Toast.fire({
-    icon: "error",
-    title: title,
-  });
+// Category color mapping
+// const categoryConfig = {
+//   default: { bg: "#F3F4F6", color: "#1e293b", label: "Other" },
+// };
+
+const categoryConfig = {
+  "LPG Cylinder": { bg: "#D3EAFF", color: "#1e293b", label: "LPG Cylinder" },
+  "Gas Stove": { bg: "#FFE0CB", color: "#FF8532", label: "Gas Stove" },
+  Regulator: { bg: "#ECFDF3", color: "#027A48", label: "Regulator" },
+  Pipe: { bg: "#FEF6D7", color: "#FED229", label: "Pipe" },
+  Accessories: { bg: "#FFDCE2", color: "#F94765", label: "Accessories" },
+  Other: { bg: "#F3F4F6", color: "#1e293b", label: "Other" },
+  default: { bg: "#F3F4F6", color: "#1e293b", label: "Other" },
 };
 
 const InventoryList = () => {
@@ -84,8 +65,7 @@ const InventoryList = () => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [activeDropdown, setActiveDropdown] = useState(null);
   const [stockAlerts, setStockAlerts] = useState([]);
 
   useEffect(() => {
@@ -108,38 +88,31 @@ const InventoryList = () => {
         productsData = response.data;
       } else if (Array.isArray(response)) {
         productsData = response;
-      } else if (response?.data?.data?.data && Array.isArray(response.data.data.data)) {
+      } else if (
+        response?.data?.data?.data &&
+        Array.isArray(response.data.data.data)
+      ) {
         productsData = response.data.data.data;
       }
 
       const formattedProducts = productsData.map((product) => ({
         id: product.id,
-        product_code: product.product_code,
+        // product_code: product.product_code,
         product_name: product.product_name || product.name,
         category: product.category,
-        hsn_code: product.hsn_code,
-        unit: product.unit,
-        unit_price: product.unit_price || product.selling_price,
-        purchase_price: product.purchase_price,
         selling_price: product.selling_price,
-        gst_rate: product.gst_rate,
         current_stock: product.current_stock,
         min_stock_level: product.min_stock_level,
-        max_stock_level: product.max_stock_level,
-        reorder_level: product.reorder_level,
-        opening_stock: product.opening_stock,
-        location: product.location,
-        brand_id: product.brand_id,
-        brand_name: product.brand_name,
-        status: product.status,
-        created_at: product.created_at,
-        updated_at: product.updated_at,
+        gst_rate: product.gst_rate,
+        unit: product.unit,
       }));
 
       setProducts(formattedProducts);
     } catch (error) {
       console.error("Failed to load products:", error);
-      setErrorMessage(error.response?.data?.message || "Failed to load products");
+      setErrorMessage(
+        error.response?.data?.message || "Failed to load products",
+      );
       setProducts([]);
     } finally {
       setLoading(false);
@@ -149,8 +122,6 @@ const InventoryList = () => {
   const loadStockAlerts = async () => {
     try {
       const response = await getStockAlerts();
-      console.log("Stock alerts response:", response);
-      
       let alertsData = [];
       if (response?.data?.data && Array.isArray(response.data.data)) {
         alertsData = response.data.data;
@@ -159,7 +130,6 @@ const InventoryList = () => {
       } else if (Array.isArray(response)) {
         alertsData = response;
       }
-      
       setStockAlerts(alertsData);
     } catch (error) {
       console.error("Failed to load stock alerts:", error);
@@ -167,8 +137,7 @@ const InventoryList = () => {
   };
 
   const handleView = (product) => {
-    setSelectedProduct(product);
-    setShowViewModal(true);
+    navigate(`/inventory/view/${product.id}`);
   };
 
   const handleEdit = (id) => {
@@ -194,45 +163,62 @@ const InventoryList = () => {
     if (result.isConfirmed) {
       try {
         await deleteProduct(id);
-        showDeleteSuccessToast(`Product "${name}" deleted successfully`);
+        toast.success(`✓ Product "${name}" deleted successfully!`, {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: "colored",
+          transition: Bounce,
+        });
         await loadProducts();
         await loadStockAlerts();
       } catch (error) {
         console.error("Delete error:", error);
-        showDeleteErrorToast(error.response?.data?.message || "Failed to delete product");
+        toast.error(`✗ ${error.response?.data?.message || "Failed to delete product"}`, {
+          position: "top-right",
+          autoClose: 4000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: "colored",
+          transition: Bounce,
+        });
       }
     }
   };
 
-  const getStockStatusBadge = (currentStock, minStockLevel) => {
+  const getStockStatus = (currentStock, minStockLevel) => {
     if (currentStock <= 0) {
-      return (
-        <Badge 
-          bg="danger"
-          style={{ padding: "6px 12px", borderRadius: "20px", fontWeight: "500" }}
-        >
-          Out of Stock
-        </Badge>
-      );
+      return "outOfStock";
     } else if (currentStock <= minStockLevel) {
-      return (
-        <Badge 
-          bg="warning"
-          style={{ padding: "6px 12px", borderRadius: "20px", fontWeight: "500" }}
-        >
-          Low Stock
-        </Badge>
-      );
+      return "lowStock";
     } else {
-      return (
-        <Badge 
-          bg="secondary"
-          style={{ padding: "6px 12px", borderRadius: "20px", fontWeight: "500", backgroundColor: "#6c757d" }}
-        >
-          In Stock
-        </Badge>
-      );
+      return "inStock";
     }
+  };
+
+  const getStockStatusBadge = (currentStock, minStockLevel) => {
+    const status = getStockStatus(currentStock, minStockLevel);
+    const config = stockStatusConfig[status];
+    return (
+      <span
+        style={{
+          backgroundColor: config.bg,
+          color: config.color,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          fontWeight: "600",
+          fontSize: "13px",
+          display: "inline-block",
+        }}
+      >
+        {config.label}
+      </span>
+    );
   };
 
   const clearFilters = () => {
@@ -246,30 +232,38 @@ const InventoryList = () => {
       searchTerm === "" ||
       product.product_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.hsn_code?.toLowerCase().includes(searchTerm.toLowerCase());
+      product.category?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesCategory = categoryFilter === "all" || product.category === categoryFilter;
-    
+    const matchesCategory =
+      categoryFilter === "all" || product.category === categoryFilter;
+
+    const stockStatus = getStockStatus(product.current_stock, product.min_stock_level);
     let matchesStockStatus = true;
     if (stockStatusFilter === "low") {
-      matchesStockStatus = product.current_stock > 0 && product.current_stock <= product.min_stock_level;
+      matchesStockStatus = stockStatus === "lowStock";
     } else if (stockStatusFilter === "out") {
-      matchesStockStatus = product.current_stock <= 0;
+      matchesStockStatus = stockStatus === "outOfStock";
     } else if (stockStatusFilter === "in") {
-      matchesStockStatus = product.current_stock > product.min_stock_level;
+      matchesStockStatus = stockStatus === "inStock";
     }
 
     return matchesSearch && matchesCategory && matchesStockStatus;
   });
 
-  const categories = [...new Set(products.map((product) => product.category).filter(Boolean))];
+  const categories = [
+    ...new Set(products.map((product) => product.category).filter(Boolean)),
+  ];
 
   const stats = {
     total: products.length,
-    totalValue: products.reduce((sum, p) => sum + ((p.current_stock || 0) * (p.selling_price || 0)), 0),
-    lowStock: products.filter(p => p.current_stock > 0 && p.current_stock <= p.min_stock_level).length,
-    outOfStock: products.filter(p => p.current_stock <= 0).length,
+    totalValue: products.reduce(
+      (sum, p) => sum + (p.current_stock || 0) * (p.selling_price || 0),
+      0,
+    ),
+    lowStock: products.filter(
+      (p) => p.current_stock > 0 && p.current_stock <= p.min_stock_level,
+    ).length,
+    outOfStock: products.filter((p) => p.current_stock <= 0).length,
   };
 
   const formatCurrency = (amount) => {
@@ -282,49 +276,58 @@ const InventoryList = () => {
   const getFilterText = () => {
     const filters = [];
     if (categoryFilter !== "all") filters.push(`Category: ${categoryFilter}`);
-    if (stockStatusFilter !== "all") filters.push(`Status: ${stockStatusFilter === "low" ? "Low Stock" : stockStatusFilter === "out" ? "Out of Stock" : "In Stock"}`);
+    if (stockStatusFilter !== "all")
+      filters.push(
+        `Status: ${stockStatusFilter === "low" ? "Low Stock" : stockStatusFilter === "out" ? "Out of Stock" : "In Stock"}`,
+      );
     if (searchTerm) filters.push(`Search: "${searchTerm}"`);
     return filters;
   };
 
-  const handleGoBack = () => {
-    navigate("/dashboard");
-  };
-
   if (loading) {
     return (
-      <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      <Container fluid className="p-4">
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+          transition={Bounce}
+        />
         <div className="text-center py-5">
           <Spinner animation="border" variant="secondary" size="lg" />
-          <h4 className="mt-3">Loading inventory...</h4>
+          <h4 className="mt-3">Loading products...</h4>
         </div>
       </Container>
     );
   }
 
   return (
-    <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
-      {/* Back Button */}
-      <div className="mb-3 d-flex align-items-center gap-3">
-        <Button
-          variant="link"
-          className="text-decoration-none d-flex align-items-center"
-          onClick={handleGoBack}
-          style={{ color: "#6c757d" }}
-        >
-          <FaSignOutAlt className="me-1" /> Back to Dashboard
-        </Button>
-        <Button
-          variant="outline-secondary"
-          size="sm"
-          className="rounded-pill"
-          onClick={() => navigate("/dashboard")}
-        >
-          <FaHome className="me-1" /> Dashboard
-        </Button>
-      </div>
+    <Container
+      fluid
+      className="px-4 py-3"
+      style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+    >
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+        transition={Bounce}
+      />
 
-      {/* Success Message */}
       {successMessage && (
         <Alert
           variant="success"
@@ -336,7 +339,6 @@ const InventoryList = () => {
         </Alert>
       )}
 
-      {/* Error Message */}
       {errorMessage && (
         <Alert
           variant="danger"
@@ -351,38 +353,62 @@ const InventoryList = () => {
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
-            {/* Inventory Management */}
+          {/* <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
+            Inventory Management
           </h2>
+          <p className="text-muted mb-0">Manage all products and track stock levels</p> */}
         </div>
         <Button
-          variant="secondary"
           onClick={handleAdd}
-          style={{ backgroundColor: "#6c757d", border: "none", borderRadius: "8px" }}
+          style={{
+            backgroundColor: "rgb(30, 58, 111)",
+            border: "none",
+            borderRadius: "14px",
+            padding: "12px 22px",
+            fontWeight: "600",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
+          }}
         >
-          <FaPlus className="me-2" /> Add Product
+          <FaPlus size={14} />
+          Add Product
         </Button>
-      </div>
-
-      {/* Inventory Section Title */}
-      <div className="mb-3">
-        <h3 className="fw-bold mb-0">Inventory Management</h3>
-        <p className="text-muted mb-0">Manage all products, track stock levels, and monitor inventory</p>
       </div>
 
       {/* Stats Cards */}
       <Row className="g-3 mb-4">
         <Col md={3}>
-          <Card className="border-0" style={{ borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>Total Products</small>
-                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>{stats.total}</h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>Total: {stats.total}</small>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Total Products
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    {stats.total}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    Active products
+                  </small>
                 </div>
-                <div style={{ backgroundColor: "#e3f2fd", padding: "8px", borderRadius: "10px" }}>
-                  <FaBoxes size={18} style={{ color: "#4361ee" }} />
+                <div
+                  style={{
+                    backgroundColor: "#FFDCE2",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaBoxes size={18} style={{ color: "#F94765" }} />
                 </div>
               </div>
             </Card.Body>
@@ -390,16 +416,34 @@ const InventoryList = () => {
         </Col>
 
         <Col md={3}>
-          <Card className="border-0" style={{ borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>Stock Value</small>
-                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>₹{formatCurrency(stats.totalValue)}</h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>Inventory value</small>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Stock Value
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    ₹{formatCurrency(stats.totalValue)}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    Inventory value
+                  </small>
                 </div>
-                <div style={{ backgroundColor: "#e8f5e9", padding: "8px", borderRadius: "10px" }}>
-                  <FaRupeeSign size={18} style={{ color: "#2e7d32" }} />
+                <div
+                  style={{
+                    backgroundColor: "#FEF6D7",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaRupeeSign size={18} style={{ color: "#FED229" }} />
                 </div>
               </div>
             </Card.Body>
@@ -407,16 +451,34 @@ const InventoryList = () => {
         </Col>
 
         <Col md={3}>
-          <Card className="border-0" style={{ borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>Low Stock</small>
-                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>{stats.lowStock}</h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>Needs restock</small>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Low Stock
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    {stats.lowStock}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    Needs restock
+                  </small>
                 </div>
-                <div style={{ backgroundColor: "#fff3e0", padding: "8px", borderRadius: "10px" }}>
-                  <FaExclamationTriangle size={18} style={{ color: "#ff9800" }} />
+                <div
+                  style={{
+                    backgroundColor: "#FFE0CB",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaExclamationTriangle size={18} style={{ color: "#FF8532" }} />
                 </div>
               </div>
             </Card.Body>
@@ -424,16 +486,34 @@ const InventoryList = () => {
         </Col>
 
         <Col md={3}>
-          <Card className="border-0" style={{ borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>Out of Stock</small>
-                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>{stats.outOfStock}</h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>Unavailable</small>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Out of Stock
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    {stats.outOfStock}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    Unavailable
+                  </small>
                 </div>
-                <div style={{ backgroundColor: "#e8f5e9", padding: "8px", borderRadius: "10px" }}>
-                  <FaTimes size={18} style={{ color: "#2e7d32" }} />
+                <div
+                  style={{
+                    backgroundColor: "#D3EAFF",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaTimes size={18} style={{ color: "#437EF7" }} />
                 </div>
               </div>
             </Card.Body>
@@ -446,24 +526,29 @@ const InventoryList = () => {
         <Alert variant="warning" className="mb-4 rounded-3">
           <div className="d-flex align-items-center">
             <FaExclamationTriangle size={20} className="me-2" />
-            <strong>Stock Alerts:</strong> {stockAlerts.length} product(s) are running low on stock.
-            Please review and restock soon.
+            <strong>Stock Alerts:</strong> {stockAlerts.length} product(s) are
+            running low on stock. Please review and restock soon.
           </div>
         </Alert>
       )}
 
       {/* Search and Filter Section */}
-      <Card className="border-0 mb-4" style={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+      <Card
+        className="border-0 mb-4"
+        style={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}
+      >
         <Card.Body className="py-3">
           <Row>
-            <Col md={5}>
+            <Col md={4}>
               <InputGroup>
-                <InputGroup.Text style={{ backgroundColor: "#fff", borderRight: "none" }}>
+                <InputGroup.Text
+                  style={{ backgroundColor: "#fff", borderRight: "none" }}
+                >
                   <FaSearch className="text-muted" />
                 </InputGroup.Text>
                 <Form.Control
                   type="text"
-                  placeholder="Search products..."
+                  placeholder="Search by code, name or category..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ borderLeft: "none" }}
@@ -485,7 +570,9 @@ const InventoryList = () => {
               >
                 <option value="all">All Categories ({stats.total})</option>
                 {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat} value={cat}>
+                    {cat} ({products.filter(p => p.category === cat).length})
+                  </option>
                 ))}
               </Form.Select>
             </Col>
@@ -505,23 +592,29 @@ const InventoryList = () => {
                 variant="outline-secondary"
                 onClick={clearFilters}
                 className="w-100"
-                title="Clear all filters"
+                title="Clear filters"
               >
                 <FaFilter />
               </Button>
             </Col>
           </Row>
 
-          {/* Active Filters Display */}
           {getFilterText().length > 0 && (
             <div className="mt-3 pt-2 border-top">
               <small className="text-muted me-2">Active filters:</small>
               {getFilterText().map((filter, index) => (
-                <Badge
+                <span
                   key={index}
-                  bg="secondary"
-                  className="me-2 px-3 py-2"
-                  style={{ cursor: "pointer" }}
+                  style={{
+                    backgroundColor: "#6c757d",
+                    color: "white",
+                    cursor: "pointer",
+                    padding: "8px 12px",
+                    marginRight: "8px",
+                    borderRadius: "20px",
+                    display: "inline-block",
+                    fontSize: "12px",
+                  }}
                   onClick={() => {
                     if (filter.includes("Category")) setCategoryFilter("all");
                     if (filter.includes("Status")) setStockStatusFilter("all");
@@ -529,7 +622,7 @@ const InventoryList = () => {
                   }}
                 >
                   {filter} <FaTimes size={10} className="ms-2" />
-                </Badge>
+                </span>
               ))}
               <Button
                 variant="link"
@@ -549,116 +642,238 @@ const InventoryList = () => {
         <p className="text-muted mb-0">
           Showing {filteredProducts.length} of {products.length} products
         </p>
-        {filteredProducts.length === 0 && (
-          <Button variant="link" onClick={clearFilters} className="p-0">
-            Clear all filters
-          </Button>
-        )}
       </div>
 
-      {/* Products Table */}
-      <Card className="border-0" style={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
+      {/* Products Table - Simplified */}
+      <Card
+        className="border-0"
+        style={{
+          borderRadius: "12px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          overflow: "hidden",
+        }}
+      >
         <Card.Body className="p-0">
           <div className="table-responsive">
             <Table hover className="mb-0" style={{ fontSize: "14px" }}>
-              <thead style={{ backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>
+              <thead
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  borderBottom: "2px solid #dee2e6",
+                }}
+              >
                 <tr>
-                  <th style={{ padding: "16px 12px" }}>Product Code</th>
-                  <th style={{ padding: "16px 12px" }}>Product Name</th>
+                  <th style={{ padding: "16px 12px" }}>Product Details</th>
                   <th style={{ padding: "16px 12px" }}>Category</th>
-                  <th style={{ padding: "16px 12px" }}>HSN Code</th>
-                  <th style={{ padding: "16px 12px" }}>Selling Price</th>
-                  <th style={{ padding: "16px 12px" }}>Current Stock</th>
-                  <th style={{ padding: "16px 12px" }}>Stock Status</th>
-                  <th style={{ padding: "16px 12px" }}>GST%</th>
+                  <th style={{ padding: "16px 12px" }}>Price</th>
+                  <th style={{ padding: "16px 12px" }}>Stock</th>
+                  <th style={{ padding: "16px 12px" }}>Status</th>
+                  <th style={{ padding: "16px 12px" }}>GST</th>
                   <th style={{ padding: "16px 12px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredProducts.map((product) => (
-                  <tr key={product.id} style={{ borderBottom: "1px solid #e9ecef" }}>
-                    <td style={{ padding: "16px 12px" }}>
-                      <div className="fw-semibold text-primary">{product.product_code}</div>
-                      <small className="text-muted">ID: {product.id}</small>
-                    </td>
+                  <tr
+                    key={product.id}
+                    style={{ borderBottom: "1px solid #e9ecef" }}
+                  >
+                    {/* Product Details */}
                     <td style={{ padding: "16px 12px" }}>
                       <div className="fw-semibold">{product.product_name}</div>
+                      {/* <small className="text-muted">Code: {product.product_code}</small> */}
                     </td>
+
+                    {/* Category */}
                     <td style={{ padding: "16px 12px" }}>
-                      <Badge 
-                        bg="secondary"
-                        style={{ padding: "6px 12px", borderRadius: "20px", fontWeight: "500", backgroundColor: "#6c757d" }}
+                      <span
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "20px",
+                          fontWeight: "600",
+                          fontSize: "13px",
+                          backgroundColor: categoryConfig[product.category]?.bg || categoryConfig.default.bg,
+                          color: categoryConfig[product.category]?.color || categoryConfig.default.color,
+                          border: "none",
+                          display: "inline-block",
+                        }}
                       >
                         {product.category || "N/A"}
-                      </Badge>
+                      </span>
                     </td>
+
+                    {/* Price */}
                     <td style={{ padding: "16px 12px" }}>
-                      <code className="small" style={{ color: "#6c757d" }}>{product.hsn_code || "-"}</code>
+                      <span className="fw-semibold">
+                        ₹{formatCurrency(product.selling_price)}
+                      </span>
                     </td>
-                    <td className="fw-semibold" style={{ padding: "16px 12px" }}>
-                      ₹{formatCurrency(product.selling_price)}
-                    </td>
+
+                    {/* Stock */}
                     <td style={{ padding: "16px 12px" }}>
-                      <span className={product.current_stock <= product.min_stock_level ? "text-danger fw-semibold" : "fw-semibold"} style={{ color: product.current_stock <= product.min_stock_level ? "#dc3545" : "#6c757d" }}>
+                      <span
+                        className="fw-semibold"
+                        style={{
+                          color: product.current_stock <= product.min_stock_level
+                            ? "#F94765"
+                            : "#1e293b",
+                        }}
+                      >
                         {product.current_stock || 0} {product.unit || "NOS"}
                       </span>
                     </td>
+
+                    {/* Stock Status */}
                     <td style={{ padding: "16px 12px" }}>
                       {getStockStatusBadge(product.current_stock, product.min_stock_level)}
                     </td>
+
+                    {/* GST */}
                     <td style={{ padding: "16px 12px" }}>
-                      <Badge 
-                        bg="secondary"
-                        style={{ padding: "6px 12px", borderRadius: "20px", fontWeight: "500", backgroundColor: "#6c757d" }}
+                      <span
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "20px",
+                          fontWeight: "600",
+                          fontSize: "13px",
+                          backgroundColor: "#F3F4F6",
+                          color: "#1e293b",
+                          display: "inline-block",
+                        }}
                       >
                         {product.gst_rate || 18}%
-                      </Badge>
+                      </span>
                     </td>
+
+                    {/* Actions Dropdown */}
                     <td style={{ padding: "16px 12px" }}>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="me-2"
-                        onClick={() => handleView(product)}
-                        title="View Details"
-                        style={{ color: "#4361ee", textDecoration: "none" }}
-                      >
-                        <FaEye />
-                      </Button>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="me-2"
-                        onClick={() => handleEdit(product.id)}
-                        title="Edit"
-                        style={{ color: "#ff9800", textDecoration: "none" }}
-                      >
-                        <FaEdit />
-                      </Button>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => handleDelete(product.id, product.product_name)}
-                        title="Delete"
-                        style={{ color: "#dc3545", textDecoration: "none" }}
-                      >
-                        <FaTrash />
-                      </Button>
+                      <div className="action-dropdown">
+                        <button
+                          className="action-trigger"
+                          onClick={() =>
+                            setActiveDropdown(
+                              activeDropdown === product.id ? null : product.id,
+                            )
+                          }
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "4px",
+                            borderRadius: "6px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transition: "background-color 0.2s",
+                          }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor = "#f1f5f9")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor = "transparent")
+                          }
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="6" r="2" fill="currentColor" />
+                            <circle cx="12" cy="12" r="2" fill="currentColor" />
+                            <circle cx="12" cy="18" r="2" fill="currentColor" />
+                          </svg>
+                        </button>
+
+                        {activeDropdown === product.id && (
+                          <div className="dropdown-menu-custom">
+                            <button
+                              onClick={() => {
+                                setActiveDropdown(null);
+                                handleView(product);
+                              }}
+                              className="dropdown-item-custom"
+                              title="View Details"
+                            >
+                              <FaEye style={{ color: "#4361ee", fontSize: "14px" }} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveDropdown(null);
+                                handleEdit(product.id);
+                              }}
+                              className="dropdown-item-custom"
+                              title="Edit"
+                            >
+                              <FaEdit style={{ color: "#ff9800", fontSize: "14px" }} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveDropdown(null);
+                                handleDelete(product.id, product.product_name);
+                              }}
+                              className="dropdown-item-custom delete"
+                              title="Delete"
+                            >
+                              <FaTrash style={{ color: "#dc3545", fontSize: "14px" }} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <style>{`
+                        .action-dropdown { position: relative; }
+                        .action-trigger { color: #64748b; transition: all 0.2s; }
+                        .action-trigger:hover { color: #1e293b; }
+                        .dropdown-menu-custom {
+                          position: absolute;
+                          top: 100%;
+                          right: 0;
+                          margin-top: 4px;
+                          min-width: 40px;
+                          background: white;
+                          border-radius: 8px;
+                          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                          z-index: 1000;
+                          overflow: hidden;
+                          animation: dropdownSlide 0.2s ease;
+                          display: flex;
+                          flex-direction: column;
+                          gap: 2px;
+                          padding: 4px;
+                        }
+                        @keyframes dropdownSlide {
+                          from { opacity: 0; transform: translateY(-5px); }
+                          to { opacity: 1; transform: translateY(0); }
+                        }
+                        .dropdown-item-custom {
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          width: 100%;
+                          padding: 6px;
+                          border: none;
+                          background: white;
+                          cursor: pointer;
+                          transition: background-color 0.2s;
+                          border-radius: 6px;
+                        }
+                        .dropdown-item-custom:hover { background-color: #f8fafc; }
+                        .dropdown-item-custom.delete:hover { background-color: #fef2f2; }
+                      `}</style>
                     </td>
                   </tr>
                 ))}
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan="9" className="text-center py-5">
+                    <td colSpan="7" className="text-center py-5">
                       <div className="py-4">
                         <FaSearch size={40} className="text-muted mb-3" />
                         <h5 className="text-muted">No products found</h5>
                         <p className="text-muted small">
                           Try adjusting your search or filter criteria
                         </p>
-                        <Button
-                          variant="primary"
-                          size="sm"
+                        <Button 
+                          style={{
+                            backgroundColor: "rgb(30, 58, 111)",
+                            border: "none"
+                          }}
+                          size="sm" 
                           onClick={clearFilters}
                         >
                           Clear all filters
@@ -672,138 +887,6 @@ const InventoryList = () => {
           </div>
         </Card.Body>
       </Card>
-
-      {/* View Product Modal */}
-      <Modal show={showViewModal} onHide={() => setShowViewModal(false)} size="lg" centered>
-        <Modal.Header closeButton className="border-0">
-          <Modal.Title className="fw-bold">
-            <FaEye className="me-2 text-secondary" /> Product Details
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="p-4">
-          {selectedProduct && (
-            <Row>
-              <Col md={6}>
-                <div className="mb-3">
-                  <small className="text-muted">Product Code</small>
-                  <p className="fw-semibold text-primary mb-0">{selectedProduct.product_code}</p>
-                </div>
-              </Col>
-              <Col md={6}>
-                <div className="mb-3">
-                  <small className="text-muted">Product Name</small>
-                  <p className="fw-semibold mb-0">{selectedProduct.product_name}</p>
-                </div>
-              </Col>
-              <Col md={6}>
-                <div className="mb-3">
-                  <small className="text-muted">Category</small>
-                  <p className="mb-0">{selectedProduct.category || "N/A"}</p>
-                </div>
-              </Col>
-              <Col md={6}>
-                <div className="mb-3">
-                  <small className="text-muted">HSN Code</small>
-                  <p className="mb-0"><code style={{ color: "#6c757d" }}>{selectedProduct.hsn_code || "N/A"}</code></p>
-                </div>
-              </Col>
-              <Col md={6}>
-                <div className="mb-3">
-                  <small className="text-muted">Unit</small>
-                  <p className="mb-0">{selectedProduct.unit || "NOS"}</p>
-                </div>
-              </Col>
-              <Col md={6}>
-                <div className="mb-3">
-                  <small className="text-muted">Location</small>
-                  <p className="mb-0">{selectedProduct.location || "N/A"}</p>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Purchase Price</small>
-                  <p className="text-danger fw-semibold mb-0">₹{formatCurrency(selectedProduct.purchase_price)}</p>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Selling Price</small>
-                  <p className="text-success fw-semibold mb-0">₹{formatCurrency(selectedProduct.selling_price)}</p>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">GST Rate</small>
-                  <p className="mb-0">{selectedProduct.gst_rate || 18}%</p>
-                </div>
-              </Col>
-              <Col md={12}>
-                <hr />
-                <h6 className="text-bold mb-3">Stock Information</h6>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Opening Stock</small>
-                  <p className="mb-0">{selectedProduct.opening_stock || 0}</p>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Current Stock</small>
-                  <p className={selectedProduct.current_stock <= selectedProduct.min_stock_level ? "text-danger fw-semibold mb-0" : "fw-semibold mb-0"} style={{ color: selectedProduct.current_stock <= selectedProduct.min_stock_level ? "#dc3545" : "#6c757d" }}>
-                    {selectedProduct.current_stock || 0}
-                  </p>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Stock Status</small>
-                  <div>{getStockStatusBadge(selectedProduct.current_stock, selectedProduct.min_stock_level)}</div>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Min Stock Level</small>
-                  <p className="mb-0">{selectedProduct.min_stock_level || 0}</p>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Max Stock Level</small>
-                  <p className="mb-0">{selectedProduct.max_stock_level || 0}</p>
-                </div>
-              </Col>
-              <Col md={4}>
-                <div className="mb-3">
-                  <small className="text-muted">Reorder Level</small>
-                  <p className="mb-0">{selectedProduct.reorder_level || 0}</p>
-                </div>
-              </Col>
-            </Row>
-          )}
-        </Modal.Body>
-        <Modal.Footer className="bg-light rounded-bottom-3 border-0">
-          <Button 
-            variant="secondary" 
-            onClick={() => setShowViewModal(false)}
-            style={{ backgroundColor: "#6c757d", border: "none" }}
-          >
-            Close
-          </Button>
-          {selectedProduct && (
-            <Button
-              variant="primary"
-              onClick={() => {
-                setShowViewModal(false);
-                handleEdit(selectedProduct.id);
-              }}
-              style={{ backgroundColor: "#6c757d", border: "none" }}
-            >
-              <FaEdit className="me-2" /> Edit Product
-            </Button>
-          )}
-        </Modal.Footer>
-      </Modal>
     </Container>
   );
 };

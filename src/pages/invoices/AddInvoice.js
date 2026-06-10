@@ -1,3 +1,5 @@
+// src/pages/invoices/AddInvoice.js
+
 import React, { useState, useEffect } from "react";
 import {
   Container,
@@ -9,8 +11,30 @@ import {
   Table,
   Alert,
   Spinner,
+  Tab,
+  Nav,
+  OverlayTrigger,
+  Tooltip,
 } from "react-bootstrap";
-import { FaPlus, FaTrash, FaSave, FaArrowLeft } from "react-icons/fa";
+import {
+  FaPlus,
+  FaTrash,
+  FaSave,
+  FaArrowLeft,
+  FaUser,
+  FaBuilding,
+  FaCalendarAlt,
+  FaRupeeSign,
+  FaPercent,
+  FaMoneyBillWave,
+  FaFileInvoice,
+  FaInfoCircle,
+  FaBoxes,
+  FaCreditCard,
+  FaCheckCircle,
+  FaExclamationTriangle,
+  FaTimes,
+} from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -21,6 +45,7 @@ import { cylinderTypeApi } from "../../api/tenant/masterData.api";
 
 const AddInvoice = () => {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("party");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [customers, setCustomers] = useState([]);
@@ -59,12 +84,32 @@ const AddInvoice = () => {
     },
   ]);
 
-  // Fetch cylinder types on component mount
+  // Validation helpers
+  const getValidationIcon = (fieldValue, validationError) => {
+    if (!fieldValue) {
+      return <FaInfoCircle className="text-secondary ms-2" size={14} />;
+    }
+    if (!validationError) {
+      return <FaCheckCircle className="text-success ms-2" size={14} />;
+    }
+    return (
+      <OverlayTrigger
+        placement="top"
+        overlay={
+          <Tooltip id={`tooltip-${fieldValue}`}>{validationError}</Tooltip>
+        }
+      >
+        <span className="text-danger ms-2" style={{ cursor: "pointer" }}>
+          <FaExclamationTriangle size={14} />
+        </span>
+      </OverlayTrigger>
+    );
+  };
+
   useEffect(() => {
     fetchCylinderTypes();
   }, []);
 
-  // Fetch parties when party type changes
   useEffect(() => {
     if (partyType === "customer") {
       fetchCustomers();
@@ -77,8 +122,6 @@ const AddInvoice = () => {
     setLoadingCylinderTypes(true);
     try {
       const response = await cylinderTypeApi.getAll();
-      console.log("Cylinder types response:", response);
-
       let cylinderList = [];
       if (response?.data?.data && Array.isArray(response.data.data)) {
         cylinderList = response.data.data;
@@ -87,8 +130,6 @@ const AddInvoice = () => {
       } else if (Array.isArray(response)) {
         cylinderList = response;
       }
-
-      console.log("Extracted cylinder types:", cylinderList);
       setCylinderTypes(cylinderList);
     } catch (error) {
       console.error("Error fetching cylinder types:", error);
@@ -107,8 +148,6 @@ const AddInvoice = () => {
     setLoadingParties(true);
     try {
       const response = await getCustomers();
-      console.log("Customers response:", response);
-
       let customerList = [];
       if (response?.data?.data?.data && Array.isArray(response.data.data.data)) {
         customerList = response.data.data.data;
@@ -119,8 +158,6 @@ const AddInvoice = () => {
       } else if (Array.isArray(response)) {
         customerList = response;
       }
-
-      console.log("Extracted customers:", customerList);
       setCustomers(customerList);
     } catch (error) {
       console.error("Error fetching customers:", error);
@@ -139,8 +176,6 @@ const AddInvoice = () => {
     setLoadingParties(true);
     try {
       const response = await getDealers();
-      console.log("Dealers response:", response);
-
       let dealerList = [];
       if (response?.data?.data?.data && Array.isArray(response.data.data.data)) {
         dealerList = response.data.data.data;
@@ -151,8 +186,6 @@ const AddInvoice = () => {
       } else if (Array.isArray(response)) {
         dealerList = response;
       }
-
-      console.log("Extracted dealers:", dealerList);
       setDealers(dealerList);
     } catch (error) {
       console.error("Error fetching dealers:", error);
@@ -199,17 +232,11 @@ const AddInvoice = () => {
       (party) => party.id === parseInt(partyId)
     );
 
-    console.log("Selected party:", selectedParty);
-
     if (selectedParty) {
       setInvoiceData({
         ...invoiceData,
         partyId: selectedParty.id,
-        partyName:
-          selectedParty.name ||
-          selectedParty.customer_name ||
-          selectedParty.dealer_name ||
-          "",
+        partyName: selectedParty.name || selectedParty.customer_name || selectedParty.dealer_name || "",
         partyGst: selectedParty.gst_number || selectedParty.gst || "",
         partyAddress: selectedParty.address || "",
       });
@@ -294,12 +321,7 @@ const AddInvoice = () => {
     const newErrors = {};
 
     if (!invoiceData.partyId) {
-      newErrors.partyId = `Please select a ${
-        partyType === "customer" ? "customer" : "dealer"
-      }`;
-    }
-    if (!invoiceData.partyName) {
-      newErrors.partyName = "Party name is required";
+      newErrors.partyId = `Please select a ${partyType === "customer" ? "customer" : "dealer"}`;
     }
     if (!invoiceData.invoiceDate) {
       newErrors.invoiceDate = "Invoice date is required";
@@ -307,13 +329,13 @@ const AddInvoice = () => {
 
     for (let i = 0; i < items.length; i++) {
       if (!items[i].cylinderTypeId) {
-        newErrors[`item_${i}_cylinder`] = `Item ${i + 1}: Select cylinder type`;
+        newErrors[`item_${i}_cylinder`] = `Select cylinder type`;
       }
       if (!items[i].quantity || items[i].quantity <= 0) {
-        newErrors[`item_${i}_quantity`] = `Item ${i + 1}: Valid quantity required`;
+        newErrors[`item_${i}_quantity`] = `Valid quantity required`;
       }
       if (!items[i].rate || items[i].rate <= 0) {
-        newErrors[`item_${i}_rate`] = `Item ${i + 1}: Valid rate required`;
+        newErrors[`item_${i}_rate`] = `Valid rate required`;
       }
     }
 
@@ -372,9 +394,7 @@ const AddInvoice = () => {
         })),
       };
 
-      console.log("Sending payload:", payload);
       const response = await createInvoice(payload);
-      console.log("Response:", response);
 
       if (response.data.success) {
         toast.success("✅ Invoice created successfully!", {
@@ -403,7 +423,11 @@ const AddInvoice = () => {
   };
 
   return (
-    <Container fluid className="p-4 bg-light min-vh-100">
+    <Container
+      fluid
+      className="px-4 py-3"
+      style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+    >
       <ToastContainer
         position="top-right"
         autoClose={3000}
@@ -418,470 +442,581 @@ const AddInvoice = () => {
         transition={Bounce}
       />
 
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h2 className="fw-bold">Create Invoice</h2>
-          <p className="text-muted mb-0">Add new GST invoice</p>
-        </div>
-        <Button variant="secondary" onClick={() => navigate("/invoices")}>
-          <FaArrowLeft className="me-2" />
-          Back
-        </Button>
-      </div>
-
       <Form onSubmit={handleSubmit}>
-        {/* Invoice Information */}
-        <Card className="border-0 shadow-sm mb-4">
-          <Card.Body>
-            <h5 className="fw-bold mb-4">Invoice Information</h5>
-            <Row>
-              <Col md={4} className="mb-3">
-                <Form.Label>
-                  Party Type <span className="text-danger">*</span>
-                </Form.Label>
-                <div className="d-flex gap-3">
+        <Card className="border-0 shadow-sm rounded-3">
+          <Card.Header className="bg-white border-bottom-0 pt-4 px-4">
+            <Nav
+              variant="tabs"
+              activeKey={activeTab}
+              onSelect={(k) => setActiveTab(k)}
+            >
+              <Nav.Item>
+                <Nav.Link eventKey="party" className="fw-semibold">
+                  <FaUser className="me-2" /> Party Information
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="items" className="fw-semibold">
+                  <FaBoxes className="me-2" /> Invoice Items
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="payment" className="fw-semibold">
+                  <FaCreditCard className="me-2" /> Payment & Discount
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="additional" className="fw-semibold">
+                  <FaInfoCircle className="me-2" /> Additional Info
+                </Nav.Link>
+              </Nav.Item>
+            </Nav>
+          </Card.Header>
+
+          <Card.Body className="p-4">
+            <Tab.Content>
+              {/* Party Information Tab */}
+              <Tab.Pane eventKey="party" active={activeTab === "party"}>
+                <Row>
+                  <Col md={12} className="mb-3">
+                    <Form.Label className="fw-semibold">Party Type *</Form.Label>
+                    <div className="d-flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => handlePartyTypeChange("customer")}
+                        style={{
+                          backgroundColor: partyType === "customer" ? "rgb(30, 58, 111)" : "#fff",
+                          color: partyType === "customer" ? "#fff" : "#6c757d",
+                          border: partyType === "customer" ? "none" : "1px solid #dee2e6",
+                          borderRadius: "8px",
+                          padding: "8px 24px",
+                        }}
+                      >
+                        Customer
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => handlePartyTypeChange("dealer")}
+                        style={{
+                          backgroundColor: partyType === "dealer" ? "rgb(30, 58, 111)" : "#fff",
+                          color: partyType === "dealer" ? "#fff" : "#6c757d",
+                          border: partyType === "dealer" ? "none" : "1px solid #dee2e6",
+                          borderRadius: "8px",
+                          padding: "8px 24px",
+                        }}
+                      >
+                        Dealer
+                      </Button>
+                    </div>
+                  </Col>
+
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">
+                      Select {partyType === "customer" ? "Customer" : "Dealer"} *
+                    </Form.Label>
+                    <div className="d-flex align-items-center">
+                      <Form.Select
+                        value={invoiceData.partyId}
+                        onChange={handlePartySelect}
+                        isInvalid={!!errors.partyId}
+                        disabled={loadingParties}
+                        style={{ borderRadius: "8px", padding: "10px" }}
+                        className="flex-grow-1"
+                      >
+                        <option value="">-- Select {partyType === "customer" ? "Customer" : "Dealer"} --</option>
+                        {(partyType === "customer" ? customers : dealers).map((party) => (
+                          <option key={party.id} value={party.id}>
+                            {party.name || party.customer_name || party.dealer_name || "Unknown"}
+                          </option>
+                        ))}
+                      </Form.Select>
+                      {getValidationIcon(invoiceData.partyId, errors.partyId)}
+                    </div>
+                    {errors.partyId && (
+                      <Form.Text className="text-danger">{errors.partyId}</Form.Text>
+                    )}
+                  </Col>
+
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">GST Number</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={invoiceData.partyGst}
+                      readOnly
+                      className="bg-light"
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                      placeholder="Not available"
+                    />
+                  </Col>
+
+                  <Col md={12} className="mb-3">
+                    <Form.Label className="fw-semibold">Party Address</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={2}
+                      value={invoiceData.partyAddress}
+                      readOnly
+                      className="bg-light"
+                      style={{ borderRadius: "8px" }}
+                      placeholder="Not available"
+                    />
+                  </Col>
+
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Invoice Date *</Form.Label>
+                    <div className="d-flex align-items-center">
+                      <Form.Control
+                        type="date"
+                        name="invoiceDate"
+                        value={invoiceData.invoiceDate}
+                        onChange={handleChange}
+                        isInvalid={!!errors.invoiceDate}
+                        style={{ borderRadius: "8px", padding: "10px" }}
+                        className="flex-grow-1"
+                      />
+                      {getValidationIcon(invoiceData.invoiceDate, errors.invoiceDate)}
+                    </div>
+                    {errors.invoiceDate && (
+                      <Form.Text className="text-danger">{errors.invoiceDate}</Form.Text>
+                    )}
+                  </Col>
+
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Due Date</Form.Label>
+                    <Form.Control
+                      type="date"
+                      name="dueDate"
+                      value={invoiceData.dueDate}
+                      onChange={handleChange}
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    />
+                  </Col>
+                </Row>
+              </Tab.Pane>
+
+              {/* Invoice Items Tab */}
+              <Tab.Pane eventKey="items" active={activeTab === "items"}>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h6 className="fw-bold mb-0" style={{ color: "rgb(30, 58, 111)" }}>
+                    <FaBoxes className="me-2" /> Invoice Items
+                  </h6>
                   <Button
                     type="button"
-                    variant={partyType === "customer" ? "secondary" : "outline-secondary"}
-                    onClick={() => handlePartyTypeChange("customer")}
+                    onClick={addItem}
                     size="sm"
+                    style={{
+                      backgroundColor: "rgb(30, 58, 111)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                    }}
                   >
-                    Customer
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={partyType === "dealer" ? "secondary" : "outline-secondary"}
-                    onClick={() => handlePartyTypeChange("dealer")}
-                    size="sm"
-                  >
-                    Dealer
+                    <FaPlus className="me-1" size={12} /> Add Item
                   </Button>
                 </div>
-              </Col>
+                <hr className="mt-0 mb-3" />
+                <div className="table-responsive">
+                  <Table bordered className="mb-0" style={{ fontSize: "14px" }}>
+                    <thead style={{ backgroundColor: "#f8f9fa" }}>
+                      <tr>
+                        <th style={{ padding: "12px", width: "25%" }}>Cylinder Type *</th>
+                        <th style={{ padding: "12px", width: "8%" }}>Qty *</th>
+                        <th style={{ padding: "12px", width: "12%" }}>Rate (₹) *</th>
+                        <th style={{ padding: "12px", width: "10%" }}>GST %</th>
+                        <th style={{ padding: "12px", width: "10%" }}>Cess %</th>
+                        <th style={{ padding: "12px", width: "10%" }}>Disc %</th>
+                        <th style={{ padding: "12px", width: "15%" }}>Total (₹)</th>
+                        <th style={{ padding: "12px", width: "10%" }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item, index) => {
+                        const itemTotal = (item.quantity || 0) * (item.rate || 0);
+                        return (
+                          <tr key={index}>
+                            <td style={{ padding: "8px" }}>
+                              <Form.Select
+                                value={item.cylinderTypeId}
+                                onChange={(e) => handleItemChange(index, "cylinderTypeId", e.target.value)}
+                                isInvalid={!!errors[`item_${index}_cylinder`]}
+                                size="sm"
+                                style={{ fontSize: "13px" }}
+                              >
+                                <option value="">Select Cylinder</option>
+                                {cylinderTypes.map((cylinder) => (
+                                  <option key={cylinder.id} value={cylinder.id}>
+                                    {cylinder.name || cylinder.cylinder_name || cylinder.type}
+                                  </option>
+                                ))}
+                              </Form.Select>
+                            </td>
+                            <td style={{ padding: "8px" }}>
+                              <Form.Control
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                                min="1"
+                                isInvalid={!!errors[`item_${index}_quantity`]}
+                                size="sm"
+                                style={{ fontSize: "13px" }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px" }}>
+                              <Form.Control
+                                type="number"
+                                value={item.rate}
+                                onChange={(e) => handleItemChange(index, "rate", e.target.value)}
+                                min="0"
+                                step="0.01"
+                                isInvalid={!!errors[`item_${index}_rate`]}
+                                size="sm"
+                                style={{ fontSize: "13px" }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px" }}>
+                              <Form.Control
+                                type="number"
+                                value={item.gstPercent}
+                                onChange={(e) => handleItemChange(index, "gstPercent", e.target.value)}
+                                min="0"
+                                step="0.01"
+                                size="sm"
+                                style={{ fontSize: "13px" }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px" }}>
+                              <Form.Control
+                                type="number"
+                                value={item.cessPercent}
+                                onChange={(e) => handleItemChange(index, "cessPercent", e.target.value)}
+                                min="0"
+                                step="0.01"
+                                size="sm"
+                                style={{ fontSize: "13px" }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px" }}>
+                              <Form.Control
+                                type="number"
+                                value={item.discountPercent}
+                                onChange={(e) => handleItemChange(index, "discountPercent", e.target.value)}
+                                min="0"
+                                step="0.01"
+                                size="sm"
+                                style={{ fontSize: "13px" }}
+                              />
+                            </td>
+                            <td className="text-end fw-bold" style={{ padding: "8px", color: "#027A48" }}>
+                              ₹{itemTotal.toFixed(2)}
+                            </td>
+                            <td className="text-center" style={{ padding: "8px" }}>
+                              <Button
+                                variant="link"
+                                size="sm"
+                                onClick={() => removeItem(index)}
+                                disabled={items.length === 1}
+                                style={{ color: "#dc3545" }}
+                              >
+                                <FaTrash />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </div>
 
-              <Col md={8} className="mb-3">
-                <Form.Label>
-                  Select {partyType === "customer" ? "Customer" : "Dealer"}{" "}
-                  <span className="text-danger">*</span>
-                </Form.Label>
-                <Form.Select
-                  value={invoiceData.partyId}
-                  onChange={handlePartySelect}
-                  isInvalid={!!errors.partyId}
-                  disabled={loadingParties}
-                  required
-                >
-                  <option value="">
-                    -- Select {partyType === "customer" ? "Customer" : "Dealer"} --
-                  </option>
-                  {(partyType === "customer" ? customers : dealers).map((party) => (
-                    <option key={party.id} value={party.id}>
-                      {party.name || party.customer_name || party.dealer_name || "Unknown"}
-                      {party.gst_number ? ` (GST: ${party.gst_number})` : ""}
-                    </option>
-                  ))}
-                </Form.Select>
-                {loadingParties && <Spinner animation="border" size="sm" className="ms-2" />}
-                <Form.Control.Feedback type="invalid">
-                  {errors.partyId}
-                </Form.Control.Feedback>
-              </Col>
+                {/* Summary Cards */}
+                <div className="mt-4">
+                  <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                    Current Totals
+                  </h6>
+                  <hr className="mt-0 mb-3" />
+                  <Row>
+                    <Col md={2}>
+                      <div className="text-center p-2 rounded" style={{ backgroundColor: "#f8f9fa" }}>
+                        <small className="text-muted">Subtotal</small>
+                        <br />
+                        <strong>₹{subtotal.toFixed(2)}</strong>
+                      </div>
+                    </Col>
+                    <Col md={2}>
+                      <div className="text-center p-2 rounded" style={{ backgroundColor: "#f8f9fa" }}>
+                        <small className="text-muted">GST</small>
+                        <br />
+                        <strong>₹{gstAmount.toFixed(2)}</strong>
+                      </div>
+                    </Col>
+                    <Col md={2}>
+                      <div className="text-center p-2 rounded" style={{ backgroundColor: "#f8f9fa" }}>
+                        <small className="text-muted">Cess</small>
+                        <br />
+                        <strong>₹{cessAmount.toFixed(2)}</strong>
+                      </div>
+                    </Col>
+                    <Col md={3}>
+                      <div className="text-center p-2 rounded" style={{ backgroundColor: "#f8f9fa" }}>
+                        <small className="text-muted">Taxable Value</small>
+                        <br />
+                        <strong>₹{taxableAmount.toFixed(2)}</strong>
+                      </div>
+                    </Col>
+                    <Col md={3}>
+                      <div className="text-center p-2 rounded" style={{ backgroundColor: "#ECFDF3", border: "1px solid #027A48" }}>
+                        <small className="text-muted" style={{ color: "#027A48" }}>Net Amount</small>
+                        <br />
+                        <strong style={{ color: "#027A48" }}>₹{netAmount.toFixed(2)}</strong>
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+              </Tab.Pane>
 
-              <Col md={6} className="mb-3">
-                <Form.Label>Party Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={invoiceData.partyName}
-                  readOnly
-                  className="bg-light"
-                  placeholder="Select a party to see name"
-                />
-              </Col>
+              {/* Payment & Discount Tab */}
+              <Tab.Pane eventKey="payment" active={activeTab === "payment"}>
+                <Row>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Discount Type</Form.Label>
+                    <Form.Select
+                      name="discountType"
+                      value={invoiceData.discountType}
+                      onChange={handleChange}
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    >
+                      <option value="fixed">Fixed Amount (₹)</option>
+                      <option value="percentage">Percentage (%)</option>
+                    </Form.Select>
+                  </Col>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Discount Value</Form.Label>
+                    <Form.Control
+                      type="number"
+                      name="discountValue"
+                      value={invoiceData.discountValue}
+                      onChange={handleChange}
+                      min="0"
+                      step="0.01"
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    />
+                  </Col>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Round Off</Form.Label>
+                    <Form.Control
+                      type="number"
+                      name="roundOff"
+                      value={invoiceData.roundOff}
+                      onChange={handleChange}
+                      step="0.01"
+                      placeholder="0.00"
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    />
+                  </Col>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Payment Status</Form.Label>
+                    <Form.Select
+                      name="paymentStatus"
+                      value={invoiceData.paymentStatus}
+                      onChange={handleChange}
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    >
+                      <option value="unpaid">Unpaid</option>
+                      <option value="paid">Paid</option>
+                      <option value="partial">Partial</option>
+                    </Form.Select>
+                  </Col>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Paid Amount (₹)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      name="paidAmount"
+                      value={invoiceData.paidAmount}
+                      onChange={handleChange}
+                      min="0"
+                      step="0.01"
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    />
+                  </Col>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Payment Method</Form.Label>
+                    <Form.Select
+                      name="paymentMethod"
+                      value={invoiceData.paymentMethod}
+                      onChange={handleChange}
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    >
+                      <option value="">Select Payment Method</option>
+                      <option value="cash">Cash</option>
+                      <option value="online">Online</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="cheque">Cheque</option>
+                    </Form.Select>
+                  </Col>
+                  <Col md={12} className="mb-3">
+                    <Form.Label className="fw-semibold">Transaction ID</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="transactionId"
+                      value={invoiceData.transactionId}
+                      onChange={handleChange}
+                      placeholder="TXN123456"
+                      style={{ borderRadius: "8px", padding: "10px" }}
+                    />
+                  </Col>
+                </Row>
 
-              <Col md={6} className="mb-3">
-                <Form.Label>GST Number</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={invoiceData.partyGst}
-                  readOnly
-                  className="bg-light"
-                  placeholder="Not available"
-                />
-              </Col>
+                {/* Final Summary */}
+                <div className="mt-4 p-3 rounded" style={{ backgroundColor: "#f8f9fa" }}>
+                  <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                    Final Invoice Summary
+                  </h6>
+                  <hr className="mt-0 mb-3" />
+                  <Row>
+                    <Col md={3}>
+                      <div><small className="text-muted">Subtotal:</small> <strong>₹{subtotal.toFixed(2)}</strong></div>
+                    </Col>
+                    <Col md={3}>
+                      <div><small className="text-muted">Discount:</small> <strong className="text-danger">-₹{discountAmount.toFixed(2)}</strong></div>
+                    </Col>
+                    <Col md={3}>
+                      <div><small className="text-muted">Taxable Amount:</small> <strong>₹{taxableAmount.toFixed(2)}</strong></div>
+                    </Col>
+                    <Col md={3}>
+                      <div><small className="text-muted">GST + Cess:</small> <strong>₹{(gstAmount + cessAmount).toFixed(2)}</strong></div>
+                    </Col>
+                    <Col md={3} className="mt-2">
+                      <div><small className="text-muted">Round Off:</small> <strong>₹{Number(invoiceData.roundOff).toFixed(2)}</strong></div>
+                    </Col>
+                    <Col md={6} className="mt-2">
+                      <div className="p-2 rounded" style={{ backgroundColor: "#ECFDF3" }}>
+                        <small className="text-muted" style={{ color: "#027A48" }}>Net Payable Amount:</small>
+                        <br />
+                        <strong className="fs-5" style={{ color: "#027A48" }}>₹{netAmount.toFixed(2)}</strong>
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+              </Tab.Pane>
 
-              <Col md={6} className="mb-3">
-                <Form.Label>Party Address</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={invoiceData.partyAddress}
-                  readOnly
-                  className="bg-light"
-                  placeholder="Not available"
-                />
-              </Col>
-
-              <Col md={6} className="mb-3">
-                <Form.Label>
-                  Invoice Date <span className="text-danger">*</span>
-                </Form.Label>
-                <Form.Control
-                  type="date"
-                  name="invoiceDate"
-                  value={invoiceData.invoiceDate}
-                  onChange={handleChange}
-                  isInvalid={!!errors.invoiceDate}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  {errors.invoiceDate}
-                </Form.Control.Feedback>
-              </Col>
-
-              <Col md={6} className="mb-3">
-                <Form.Label>Due Date</Form.Label>
-                <Form.Control
-                  type="date"
-                  name="dueDate"
-                  value={invoiceData.dueDate}
-                  onChange={handleChange}
-                />
-              </Col>
-            </Row>
+              {/* Additional Info Tab */}
+              <Tab.Pane eventKey="additional" active={activeTab === "additional"}>
+                <Row>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Notes</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={5}
+                      name="notes"
+                      value={invoiceData.notes}
+                      onChange={handleChange}
+                      placeholder="Additional notes..."
+                      style={{ borderRadius: "8px" }}
+                    />
+                  </Col>
+                  <Col md={6} className="mb-3">
+                    <Form.Label className="fw-semibold">Terms & Conditions</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={5}
+                      name="termsConditions"
+                      value={invoiceData.termsConditions}
+                      onChange={handleChange}
+                      placeholder="Terms and conditions..."
+                      style={{ borderRadius: "8px" }}
+                    />
+                  </Col>
+                </Row>
+              </Tab.Pane>
+            </Tab.Content>
           </Card.Body>
-        </Card>
 
-        {/* Invoice Items */}
-        <Card className="border-0 shadow-sm mb-4">
-          <Card.Body>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5 className="fw-bold mb-0">Invoice Items</h5>
-              <Button variant="primary" onClick={addItem} size="sm">
-                <FaPlus className="me-2" />
-                Add Item
+          {/* Action Buttons inside Card Footer */}
+          <Card.Footer className="bg-white border-top-0 pb-4 px-4">
+            {Object.keys(errors).length > 0 && (
+              <Alert variant="danger" className="mb-3">
+                Please fix the errors before submitting.
+              </Alert>
+            )}
+            <div className="d-flex justify-content-between gap-3">
+              <Button
+                onClick={() => navigate("/invoices")}
+                style={{
+                  backgroundColor: "#6c757d",
+                  border: "none",
+                  borderRadius: "14px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#fff",
+                }}
+              >
+                <FaTimes size={14} /> Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                style={{
+                  backgroundColor: "rgb(30, 58, 111)",
+                  border: "none",
+                  borderRadius: "14px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
+                }}
+              >
+                {loading ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FaSave className="me-2" /> Submit
+                  </>
+                )}
               </Button>
             </div>
-            <div className="table-responsive">
-              <Table bordered size="sm">
-                <thead className="table-light">
-                  <tr>
-                    <th style={{ width: "25%" }}>Cylinder Type</th>
-                    <th style={{ width: "10%" }}>Qty</th>
-                    <th style={{ width: "12%" }}>Rate (₹)</th>
-                    <th style={{ width: "10%" }}>GST %</th>
-                    <th style={{ width: "10%" }}>Cess %</th>
-                    <th style={{ width: "10%" }}>Disc %</th>
-                    <th style={{ width: "13%" }}>Total (₹)</th>
-                    <th style={{ width: "10%" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => {
-                    const itemTotal = (item.quantity || 0) * (item.rate || 0);
-                    return (
-                      <tr key={index}>
-                        <td>
-                          <Form.Select
-                            value={item.cylinderTypeId}
-                            onChange={(e) =>
-                              handleItemChange(index, "cylinderTypeId", e.target.value)
-                            }
-                            isInvalid={!!errors[`item_${index}_cylinder`]}
-                            disabled={loadingCylinderTypes}
-                            required
-                          >
-                            <option value="">Select Cylinder Type</option>
-                            {cylinderTypes.length > 0 ? (
-                              cylinderTypes.map((cylinder) => (
-                                <option key={cylinder.id} value={cylinder.id}>
-                                  {cylinder.name ||
-                                    cylinder.cylinder_name ||
-                                    cylinder.type ||
-                                    `Cylinder ${cylinder.id}`}
-                                  {cylinder.capacity ? ` (${cylinder.capacity} KG)` : ""}
-                                </option>
-                              ))
-                            ) : (
-                              !loadingCylinderTypes && (
-                                <option disabled>No cylinder types available</option>
-                              )
-                            )}
-                          </Form.Select>
-                          {loadingCylinderTypes && (
-                            <Spinner animation="border" size="sm" className="mt-1" />
-                          )}
-                          {!loadingCylinderTypes && cylinderTypes.length === 0 && (
-                            <small className="text-warning d-block">
-                              No cylinder types found. Please add cylinder types first.
-                            </small>
-                          )}
-                        </td>
-                        <td>
-                          <Form.Control
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) =>
-                              handleItemChange(index, "quantity", e.target.value)
-                            }
-                            min="1"
-                            isInvalid={!!errors[`item_${index}_quantity`]}
-                            required
-                          />
-                        </td>
-                        <td>
-                          <Form.Control
-                            type="number"
-                            value={item.rate}
-                            onChange={(e) =>
-                              handleItemChange(index, "rate", e.target.value)
-                            }
-                            min="0"
-                            step="0.01"
-                            isInvalid={!!errors[`item_${index}_rate`]}
-                            required
-                          />
-                        </td>
-                        <td>
-                          <Form.Control
-                            type="number"
-                            value={item.gstPercent}
-                            onChange={(e) =>
-                              handleItemChange(index, "gstPercent", e.target.value)
-                            }
-                            min="0"
-                            step="0.01"
-                          />
-                        </td>
-                        <td>
-                          <Form.Control
-                            type="number"
-                            value={item.cessPercent}
-                            onChange={(e) =>
-                              handleItemChange(index, "cessPercent", e.target.value)
-                            }
-                            min="0"
-                            step="0.01"
-                          />
-                        </td>
-                        <td>
-                          <Form.Control
-                            type="number"
-                            value={item.discountPercent}
-                            onChange={(e) =>
-                              handleItemChange(index, "discountPercent", e.target.value)
-                            }
-                            min="0"
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="text-end fw-bold">
-                          ₹{itemTotal.toFixed(2)}
-                        </td>
-                        <td className="text-center">
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => removeItem(index)}
-                            disabled={items.length === 1}
-                          >
-                            <FaTrash />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </div>
-          </Card.Body>
+          </Card.Footer>
         </Card>
-
-        {/* Discount & Round Off */}
-        <Card className="border-0 shadow-sm mb-4">
-          <Card.Body>
-            <h5 className="fw-bold mb-4">Discount & Round Off</h5>
-            <Row>
-              <Col md={4} className="mb-3">
-                <Form.Label>Discount Type</Form.Label>
-                <Form.Select
-                  name="discountType"
-                  value={invoiceData.discountType}
-                  onChange={handleChange}
-                >
-                  <option value="fixed">Fixed Amount (₹)</option>
-                  <option value="percentage">Percentage (%)</option>
-                </Form.Select>
-              </Col>
-              <Col md={4} className="mb-3">
-                <Form.Label>Discount Value</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="discountValue"
-                  value={invoiceData.discountValue}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.01"
-                />
-              </Col>
-              <Col md={4} className="mb-3">
-                <Form.Label>Round Off</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="roundOff"
-                  value={invoiceData.roundOff}
-                  onChange={handleChange}
-                  step="0.01"
-                  placeholder="0.00"
-                />
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-
-        {/* Payment Information */}
-        <Card className="border-0 shadow-sm mb-4">
-          <Card.Body>
-            <h5 className="fw-bold mb-4">Payment Information</h5>
-            <Row>
-              <Col md={4} className="mb-3">
-                <Form.Label>Payment Status</Form.Label>
-                <Form.Select
-                  name="paymentStatus"
-                  value={invoiceData.paymentStatus}
-                  onChange={handleChange}
-                >
-                  <option value="unpaid">Unpaid</option>
-                  <option value="paid">Paid</option>
-                  <option value="partial">Partial</option>
-                </Form.Select>
-              </Col>
-              <Col md={4} className="mb-3">
-                <Form.Label>Paid Amount</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="paidAmount"
-                  value={invoiceData.paidAmount}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.01"
-                />
-              </Col>
-              <Col md={4} className="mb-3">
-                <Form.Label>Payment Method</Form.Label>
-                <Form.Select
-                  name="paymentMethod"
-                  value={invoiceData.paymentMethod}
-                  onChange={handleChange}
-                >
-                  <option value="">Select Payment Method</option>
-                  <option value="cash">Cash</option>
-                  <option value="online">Online</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="cheque">Cheque</option>
-                </Form.Select>
-              </Col>
-              <Col md={6} className="mb-3">
-                <Form.Label>Transaction ID</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="transactionId"
-                  value={invoiceData.transactionId}
-                  onChange={handleChange}
-                  placeholder="TXN123456"
-                />
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-
-        {/* Notes & Terms */}
-        <Card className="border-0 shadow-sm mb-4">
-          <Card.Body>
-            <Row>
-              <Col md={6}>
-                <Form.Label>Notes</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={3}
-                  name="notes"
-                  value={invoiceData.notes}
-                  onChange={handleChange}
-                  placeholder="Additional notes..."
-                />
-              </Col>
-              <Col md={6}>
-                <Form.Label>Terms & Conditions</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={3}
-                  name="termsConditions"
-                  value={invoiceData.termsConditions}
-                  onChange={handleChange}
-                  placeholder="Terms and conditions..."
-                />
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-
-        {/* Summary */}
-        <Card className="border-0 shadow-sm mb-4">
-          <Card.Body>
-            <h5 className="fw-bold mb-3">Invoice Summary</h5>
-            <Row>
-              <Col md={2}>
-                <Alert variant="light" className="text-center mb-0 p-2">
-                  <small>Subtotal</small>
-                  <br />
-                  <strong>₹{subtotal.toFixed(2)}</strong>
-                </Alert>
-              </Col>
-              <Col md={2}>
-                <Alert variant="light" className="text-center mb-0 p-2">
-                  <small>Discount</small>
-                  <br />
-                  <strong className="text-danger">-₹{discountAmount.toFixed(2)}</strong>
-                </Alert>
-              </Col>
-              <Col md={2}>
-                <Alert variant="light" className="text-center mb-0 p-2">
-                  <small>Taxable</small>
-                  <br />
-                  <strong>₹{taxableAmount.toFixed(2)}</strong>
-                </Alert>
-              </Col>
-              <Col md={2}>
-                <Alert variant="light" className="text-center mb-0 p-2">
-                  <small>GST</small>
-                  <br />
-                  <strong>₹{gstAmount.toFixed(2)}</strong>
-                </Alert>
-              </Col>
-              <Col md={2}>
-                <Alert variant="light" className="text-center mb-0 p-2">
-                  <small>Cess</small>
-                  <br />
-                  <strong>₹{cessAmount.toFixed(2)}</strong>
-                </Alert>
-              </Col>
-              <Col md={2}>
-                <Alert variant="success" className="text-center mb-0 p-2">
-                  <small>Net Amount</small>
-                  <br />
-                  <strong className="fs-6">₹{netAmount.toFixed(2)}</strong>
-                </Alert>
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-
-        {/* Submit Button */}
-        <div className="text-end">
-          <Button type="submit" variant="success" size="lg" disabled={loading}>
-            <FaSave className="me-2" />
-            {loading ? "Creating..." : "Create Invoice"}
-          </Button>
-        </div>
       </Form>
+
+      <style>{`
+        .nav-tabs {
+          border-bottom: 2px solid #e9ecef;
+        }
+        .nav-tabs .nav-link {
+          border: none;
+          color: #6c757d;
+          padding: 12px 20px;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+        .nav-tabs .nav-link:hover {
+          color: rgb(30, 58, 111);
+          background: transparent;
+        }
+        .nav-tabs .nav-link.active {
+          color: rgb(30, 58, 111);
+          background: transparent;
+          border-bottom: 2px solid rgb(30, 58, 111);
+        }
+        .rounded-3 {
+          border-radius: 0.75rem !important;
+        }
+        .form-control:focus, .form-select:focus {
+          border-color: rgb(30, 58, 111);
+          box-shadow: 0 0 0 0.2rem rgba(30, 58, 111, 0.25);
+        }
+      `}</style>
     </Container>
   );
 };

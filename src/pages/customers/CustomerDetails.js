@@ -20,7 +20,7 @@ import {
   FaArrowLeft,
   FaEnvelope,
   FaPhone,
-  FaMapMarker,
+  FaMapMarkerAlt,
   FaBuilding,
   FaCreditCard,
   FaFileInvoice,
@@ -49,8 +49,9 @@ import {
   FaDownload,
   FaInfoCircle,
   FaExclamationTriangle,
+  FaRegBuilding,
+  FaRegAddressCard,
 } from "react-icons/fa";
-import DocumentViewer from "../../components/Modals/DocumentViewer";
 import {
   getCustomerById,
   deleteCustomer,
@@ -63,6 +64,20 @@ import {
 } from "../../api/superadmin/masterData.api";
 import Swal from "sweetalert2";
 
+// Status color mapping (matching Expenses list)
+const statusConfig = {
+  active: { bg: "#ECFDF3", color: "#027A48", label: "Active" },
+  inactive: { bg: "#FFDCE2", color: "#F94765", label: "Inactive" },
+  pending: { bg: "#FEF6D7", color: "#FED229", label: "Pending" },
+};
+
+// Customer type color mapping
+const customerTypeConfig = {
+  premium: { bg: "#D3EAFF", color: "#437EF7", label: "Premium" },
+  wholesale: { bg: "#FFE0CB", color: "#FF8532", label: "Wholesale" },
+  regular: { bg: "#F3F4F6", color: "#1e293b", label: "Regular" },
+};
+
 const CustomerDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -70,7 +85,7 @@ const CustomerDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
-  const [showDocs, setShowDocs] = useState(false);
+  const [showFullAlternateMobile, setShowFullAlternateMobile] = useState(false);
 
   // State for location names
   const [locationNames, setLocationNames] = useState({
@@ -81,13 +96,19 @@ const CustomerDetails = () => {
   });
   const [loadingLocation, setLoadingLocation] = useState(false);
 
+  // Toggle functions for visibility
+  const toggleAadhaarVisibility = () => {
+    setShowFullAadhaar(!showFullAadhaar);
+  };
+
+  const toggleAlternateMobileVisibility = () => {
+    setShowFullAlternateMobile(!showFullAlternateMobile);
+  };
+
   // Validation helper functions
   const validateGST = (gstNumber) => {
     if (!gstNumber) return { isValid: null, message: "Not provided" };
-
-    const gstRegex =
-      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/;
-
+    const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/;
     if (gstRegex.test(gstNumber)) {
       return { isValid: true, message: "Valid GST Number" };
     }
@@ -96,31 +117,21 @@ const CustomerDetails = () => {
 
   const validatePAN = (panNumber) => {
     if (!panNumber) return { isValid: null, message: "Not provided" };
-
     const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-
     if (panRegex.test(panNumber)) {
       return { isValid: true, message: "Valid PAN Number" };
     }
-    return {
-      isValid: false,
-      message: "Invalid PAN Number Format (e.g., ABCDE1234F)",
-    };
+    return { isValid: false, message: "Invalid PAN Number Format" };
   };
 
   const validateAadhaar = (aadhaarNumber) => {
     if (!aadhaarNumber) return { isValid: null, message: "Not provided" };
-
     const cleanNumber = aadhaarNumber.toString().replace(/\s/g, "");
     const aadhaarRegex = /^[2-9]{1}[0-9]{11}$/;
-
     if (aadhaarRegex.test(cleanNumber)) {
       return { isValid: true, message: "Valid Aadhaar Number" };
     }
-    return {
-      isValid: false,
-      message: "Invalid Aadhaar Number (12 digits required)",
-    };
+    return { isValid: false, message: "Invalid Aadhaar Number (12 digits required)" };
   };
 
   const validateEmail = (email) => {
@@ -138,45 +149,31 @@ const CustomerDetails = () => {
     if (mobileRegex.test(mobile)) {
       return { isValid: true, message: "Valid Mobile Number" };
     }
-    return {
-      isValid: false,
-      message: "Invalid Mobile Number (10 digits, starts with 6-9)",
-    };
+    return { isValid: false, message: "Invalid Mobile Number" };
   };
 
-  // Get validation status icon and color (B&W version)
-  const getValidationBadge = (validation) => {
+  const validateAlternateMobile = (alternateMobile, primaryMobile) => {
+    if (!alternateMobile) return { isValid: null, message: "Not provided" };
+    const mobileRegex = /^[6-9]\d{9}$/;
+    if (!mobileRegex.test(alternateMobile)) {
+      return { isValid: false, message: "Invalid Mobile Number" };
+    }
+    if (alternateMobile === primaryMobile) {
+      return { isValid: false, message: "Cannot be same as primary mobile" };
+    }
+    return { isValid: true, message: "Valid Alternate Mobile" };
+  };
+
+  const getValidationIcon = (validation) => {
     if (validation.isValid === null) {
-      return (
-        <Badge bg="secondary" className="ms-2 rounded-pill">
-          <FaInfoCircle className="me-1" size={10} /> Not Provided
-        </Badge>
-      );
+      return <FaInfoCircle className="text-secondary ms-2" size={14} title={validation.message} />;
     }
     if (validation.isValid) {
-      return (
-        <Badge bg="secondary" className="ms-2 rounded-pill">
-          <FaCheckCircle className="me-1" size={10} /> {validation.message}
-        </Badge>
-      );
+      return <FaCheckCircle className="text-success ms-2" size={14} title={validation.message} />;
     }
-    return (
-      <OverlayTrigger
-        placement="top"
-        overlay={<Tooltip id="tooltip-error">{validation.message}</Tooltip>}
-      >
-        <Badge
-          bg="secondary"
-          className="ms-2 rounded-pill"
-          style={{ cursor: "pointer" }}
-        >
-          <FaExclamationTriangle className="me-1" size={10} /> Invalid
-        </Badge>
-      </OverlayTrigger>
-    );
+    return <FaExclamationTriangle className="text-danger ms-2" size={14} title={validation.message} />;
   };
 
-  // Helper function to extract data from API response
   const extractDataFromResponse = (response) => {
     if (response?.data?.data?.data && Array.isArray(response.data.data.data)) {
       return response.data.data.data;
@@ -193,29 +190,18 @@ const CustomerDetails = () => {
     return [];
   };
 
-  // Fetch location names based on IDs
   const fetchLocationNames = async (customerData) => {
     setLoadingLocation(true);
     try {
-      const names = {
-        country: "",
-        state: "",
-        city: "",
-        pincode: "",
-      };
+      const names = { country: "", state: "", city: "", pincode: "" };
 
       if (customerData.country_id) {
         try {
           const response = await countryApi.getAll();
           const countries = extractDataFromResponse(response);
-          const country = countries.find(
-            (c) => c.id === parseInt(customerData.country_id),
-          );
-          names.country = country
-            ? country.name
-            : `ID: ${customerData.country_id}`;
+          const country = countries.find(c => c.id === parseInt(customerData.country_id));
+          names.country = country ? country.name : `ID: ${customerData.country_id}`;
         } catch (error) {
-          console.error("Error fetching country:", error);
           names.country = `ID: ${customerData.country_id}`;
         }
       }
@@ -224,12 +210,9 @@ const CustomerDetails = () => {
         try {
           const response = await stateApi.getAll(customerData.country_id);
           const states = extractDataFromResponse(response);
-          const state = states.find(
-            (s) => s.id === parseInt(customerData.state_id),
-          );
+          const state = states.find(s => s.id === parseInt(customerData.state_id));
           names.state = state ? state.name : `ID: ${customerData.state_id}`;
         } catch (error) {
-          console.error("Error fetching state:", error);
           names.state = `ID: ${customerData.state_id}`;
         }
       }
@@ -238,12 +221,9 @@ const CustomerDetails = () => {
         try {
           const response = await cityApi.getAll();
           const cities = extractDataFromResponse(response);
-          const city = cities.find(
-            (c) => c.id === parseInt(customerData.city_id),
-          );
+          const city = cities.find(c => c.id === parseInt(customerData.city_id));
           names.city = city ? city.name : `ID: ${customerData.city_id}`;
         } catch (error) {
-          console.error("Error fetching city:", error);
           names.city = `ID: ${customerData.city_id}`;
         }
       }
@@ -252,14 +232,9 @@ const CustomerDetails = () => {
         try {
           const response = await pincodeApi.getAll();
           const pincodes = extractDataFromResponse(response);
-          const pincode = pincodes.find(
-            (p) => p.id === parseInt(customerData.pincode_id),
-          );
-          names.pincode = pincode
-            ? `${pincode.code}${pincode.area ? ` - ${pincode.area}` : ""}`
-            : `ID: ${customerData.pincode_id}`;
+          const pincode = pincodes.find(p => p.id === parseInt(customerData.pincode_id));
+          names.pincode = pincode ? `${pincode.code}` : `ID: ${customerData.pincode_id}`;
         } catch (error) {
-          console.error("Error fetching pincode:", error);
           names.pincode = `ID: ${customerData.pincode_id}`;
         }
       }
@@ -278,7 +253,6 @@ const CustomerDetails = () => {
       setError(null);
       try {
         const data = await getCustomerById(id);
-
         let customerData = null;
         if (data?.data?.success && data.data.data) {
           customerData = data.data.data;
@@ -287,28 +261,17 @@ const CustomerDetails = () => {
         } else if (data) {
           customerData = data;
         }
-
         setCustomer(customerData);
-
         if (customerData) {
           await fetchLocationNames(customerData);
         }
       } catch (error) {
         console.error("Failed to fetch customer:", error);
-        setError(
-          error.response?.data?.message || "Failed to load customer details",
-        );
-        Swal.fire({
-          icon: "error",
-          title: "Error!",
-          text:
-            error.response?.data?.message || "Failed to load customer details",
-        });
+        setError(error.response?.data?.message || "Failed to load customer details");
       } finally {
         setLoading(false);
       }
     };
-
     if (id) {
       fetchCustomer();
     }
@@ -317,11 +280,11 @@ const CustomerDetails = () => {
   const handleDelete = async () => {
     const result = await Swal.fire({
       title: "Are you sure?",
-      text: `You are about to delete customer "${customer?.name}"`,
+      text: `Delete customer "${customer?.name}"?`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#666",
-      cancelButtonColor: "#999",
+      confirmButtonColor: "#6c757d",
+      cancelButtonColor: "#6c757d",
       confirmButtonText: "Yes, delete it!",
       cancelButtonText: "Cancel",
     });
@@ -338,7 +301,6 @@ const CustomerDetails = () => {
         });
         navigate("/customers");
       } catch (error) {
-        console.error("Failed to delete customer:", error);
         Swal.fire({
           icon: "error",
           title: "Error!",
@@ -348,40 +310,41 @@ const CustomerDetails = () => {
     }
   };
 
-  const handleUploadDocument = (newDoc) => {
-    setCustomer((prev) => ({
-      ...prev,
-      documents: [...(prev.documents || []), newDoc],
-    }));
-  };
-
-  const handleDeleteDocument = (docId) => {
-    setCustomer((prev) => ({
-      ...prev,
-      documents: (prev.documents || []).filter((doc) => doc.id !== docId),
-    }));
-  };
-
   const getStatusBadge = (status) => {
-    const isActive = status === 1 || status === "active" || status === "1";
+    const config = statusConfig[status?.toLowerCase()] || statusConfig.active;
     return (
-      <Badge
-        bg={isActive ? "secondary" : "secondary"}
-        className="px-3 py-2 rounded-pill"
+      <span
+        style={{
+          backgroundColor: config.bg,
+          color: config.color,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          fontWeight: "600",
+          fontSize: "13px",
+          display: "inline-block",
+        }}
       >
-        <span className={`me-1`}>
-          {isActive ? "●" : "○"}
-        </span>
-        {isActive ? "Active" : "Inactive"}
-      </Badge>
+        {config.label}
+      </span>
     );
   };
 
   const getCustomerTypeBadge = (type) => {
+    const config = customerTypeConfig[type?.toLowerCase()] || customerTypeConfig.regular;
     return (
-      <Badge bg="secondary" className="px-3 py-2 rounded-pill">
-        {type?.toUpperCase() || "REGULAR"}
-      </Badge>
+      <span
+        style={{
+          backgroundColor: config.bg,
+          color: config.color,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          fontWeight: "600",
+          fontSize: "13px",
+          display: "inline-block",
+        }}
+      >
+        {config.label}
+      </span>
     );
   };
 
@@ -391,8 +354,6 @@ const CustomerDetails = () => {
       year: "numeric",
       month: "short",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
   };
 
@@ -401,46 +362,45 @@ const CustomerDetails = () => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
   const formatAadhaar = (aadhaarNumber) => {
     if (!aadhaarNumber) return "N/A";
-
     const cleanNumber = aadhaarNumber.toString().replace(/[^\d]/g, "");
-
     if (cleanNumber.length === 12) {
       if (showFullAadhaar) {
         return cleanNumber.replace(/(\d{4})(\d{4})(\d{4})/, "$1 $2 $3");
-      } else {
-        const last4 = cleanNumber.slice(-4);
-        return `XXXX XXXX ${last4}`;
       }
+      return `XXXX XXXX ${cleanNumber.slice(-4)}`;
     }
-
     return aadhaarNumber;
   };
 
-  const toggleAadhaarVisibility = () => {
-    setShowFullAadhaar(!showFullAadhaar);
+  const formatAlternateMobile = (alternateMobile) => {
+    if (!alternateMobile) return "N/A";
+    const cleanNumber = alternateMobile.toString().replace(/[^\d]/g, "");
+    if (cleanNumber.length === 10) {
+      if (showFullAlternateMobile) {
+        return cleanNumber.replace(/(\d{5})(\d{5})/, "$1 $2");
+      }
+      return `XXXXXX ${cleanNumber.slice(-4)}`;
+    }
+    return alternateMobile;
   };
 
-  const availableCredit =
-    (parseFloat(customer?.credit_limit) || 0) -
-    (parseFloat(customer?.outstanding_amount) || 0);
-
-  // Get validation results
   const gstValidation = validateGST(customer?.gst_number);
   const panValidation = validatePAN(customer?.pan_number);
   const aadhaarValidation = validateAadhaar(customer?.aadhaar_number);
   const emailValidation = validateEmail(customer?.email);
   const mobileValidation = validateMobile(customer?.mobile);
+  const alternateMobileValidation = validateAlternateMobile(customer?.alternate_mobile, customer?.mobile);
 
   if (loading) {
     return (
-      <Container fluid className="p-4">
+      <Container fluid className="p-4" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
         <div className="text-center py-5">
           <Spinner animation="border" variant="secondary" size="lg" />
           <h5 className="mt-3 text-muted">Loading customer details...</h5>
@@ -451,13 +411,10 @@ const CustomerDetails = () => {
 
   if (error || !customer) {
     return (
-      <Container fluid className="p-4">
+      <Container fluid className="p-4" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
         <Alert variant="secondary" className="text-center">
           <h4>Customer not found</h4>
-          <p>
-            {error ||
-              "The customer you're looking for doesn't exist or has been removed."}
-          </p>
+          <p>{error || "The customer you're looking for doesn't exist."}</p>
           <Button variant="secondary" onClick={() => navigate("/customers")}>
             Back to Customers
           </Button>
@@ -467,467 +424,300 @@ const CustomerDetails = () => {
   }
 
   return (
-    <Container
-      fluid
-      className="p-4"
-      style={{ background: "#f8f9fa", minHeight: "100vh" }}
-    >
+    <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
       {/* Header */}
-      <div className="bg-white rounded-3 p-4 mb-4 shadow-sm border">
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-          <div>
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              className="mb-3 rounded-pill"
-              onClick={() => navigate("/customers")}
-            >
-              <FaArrowLeft className="me-2" /> Back to Customers
-            </Button>
-            <h2 className="fw-bold mb-1 text-dark">{customer.name}</h2>
-            <div className="d-flex align-items-center gap-3 flex-wrap">
-              <p className="mb-0 text-muted">
-                <FaHashtag className="me-1" size={12} />
-                <strong>Customer Code:</strong>{" "}
-                {customer.customer_code || "N/A"}
-              </p>
-              <p className="mb-0">
-                {getCustomerTypeBadge(customer.customer_type)}
-              </p>
-              <p className="mb-0">{getStatusBadge(customer.status)}</p>
-            </div>
-          </div>
-          <div className="d-flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => navigate(`/customers/edit/${customer.id}`)}
-              className="rounded-pill"
-            >
-              <FaEdit className="me-2" /> Edit Customer
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleDelete}
-              className="rounded-pill"
-            >
-              <FaTrash className="me-2" /> Delete
-            </Button>
-          </div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
+            {customer.name}
+          </h2>
+          {/* <div className="d-flex align-items-center gap-2 flex-wrap">
+            <span className="text-muted" style={{ fontSize: "13px" }}>
+              <FaHashtag size={12} className="me-1" /> Code: {customer.customer_code || `CUST_${String(customer.id).padStart(6, "0")}`}
+            </span>
+            <span>•</span>
+            {getCustomerTypeBadge(customer.customer_type)}
+            {getStatusBadge(customer.status)}
+          </div> */}
+        </div>
+        <div className="d-flex gap-2">
+          <Button
+            onClick={() => navigate(`/customers/edit/${customer.id}`)}
+            style={{
+              backgroundColor: "rgb(30, 58, 111)",
+              border: "none",
+              borderRadius: "30px",
+              padding: "8px 20px",
+              fontSize: "13px",
+              fontWeight: "600",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <FaEdit size={14} /> Edit
+          </Button>
         </div>
       </div>
 
-      {/* Stats Cards Row - B&W */}
-      <Row className="g-3 mb-4">
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Credit Limit
-                  </small>
-                  <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                    ₹{parseFloat(customer.credit_limit || 0).toLocaleString()}
-                  </h3>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaWallet className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Outstanding
-                  </small>
-                  <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                    ₹
-                    {parseFloat(
-                      customer.outstanding_amount || 0,
-                    ).toLocaleString()}
-                  </h3>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaCreditCard className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Credit Days
-                  </small>
-                  <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                    {customer.credit_days || 0}{" "}
-                    <small className="fs-6">days</small>
-                  </h3>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaClock className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Available Credit
-                  </small>
-                  <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                    ₹{availableCredit.toLocaleString()}
-                  </h3>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaPercent className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Main Content Tabs */}
-      <Card className="border-0 shadow-sm rounded-4">
-        <Card.Body className="p-0">
+      {/* Tabs Section */}
+      <Card className="border-0 shadow-sm rounded-3">
+        <Card.Header className="bg-white border-0 pt-3 px-4">
           <Tabs
             defaultActiveKey="overview"
-            className="px-3 pt-3 border-0 gap-2"
+            className="border-0 gap-2"
+            style={{ borderBottom: "2px solid #e9ecef" }}
           >
-            <Tab eventKey="overview" title="Overview" className="p-3">
-              <Row className="g-4">
-                {/* Personal Information */}
-                <Col lg={5}>
-                  <Card className="border-0 bg-light rounded-4 h-100">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaUserCircle className="me-2 text-secondary" /> Personal Information
-                      </h5>
-                      <hr />
-                      <div className="mb-3">
-                        <small className="text-muted d-block">
-                          Customer Code
-                        </small>
-                        <strong>
-                          {customer.customer_code ||
-                            `CUST_${String(customer.id).padStart(6, "0")}`}
-                        </strong>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">
-                          Email Address
-                        </small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{customer.email || "N/A"}</strong>
-                          {getValidationBadge(emailValidation)}
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">
-                          Mobile Number
-                        </small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{customer.mobile || "N/A"}</strong>
-                          {getValidationBadge(mobileValidation)}
-                        </div>
-                      </div>
-                      {customer.alternate_mobile && (
-                        <div className="mb-3">
-                          <small className="text-muted d-block">
-                            Alternate Mobile
-                          </small>
-                          <strong>{customer.alternate_mobile}</strong>
-                        </div>
-                      )}
-                      <div className="mb-3">
-                        <small className="text-muted d-block">GST Number</small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{customer.gst_number || "N/A"}</strong>
-                          {getValidationBadge(gstValidation)}
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">PAN Number</small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{customer.pan_number || "N/A"}</strong>
-                          {getValidationBadge(panValidation)}
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">
-                          Aadhaar Number
-                        </small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <span
-                            style={{ cursor: "pointer" }}
-                            onClick={toggleAadhaarVisibility}
-                            className="me-2"
-                          >
-                            <strong>
-                              {formatAadhaar(customer.aadhaar_number)}
-                            </strong>
-                          </span>
-                          {getValidationBadge(aadhaarValidation)}
-                          {customer.aadhaar_number && (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              onClick={toggleAadhaarVisibility}
-                              className="p-0 ms-2"
-                            >
-                              {showFullAadhaar ? "Hide" : "Show"}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
+            <Tab
+              eventKey="overview"
+              title={
+                <span className="fw-semibold">
+                  <FaUserCircle className="me-2" /> Overview
+                </span>
+              }
+              tabClassName="border-0"
+            >
+              <div className="p-3">
+                {/* Personal Information Section */}
+                <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaUser className="me-2" /> Personal Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Customer Name</small>
+                      <strong>{customer.name}</strong>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Customer Code</small>
+                      <strong>{customer.customer_code || `CUST_${String(customer.id).padStart(6, "0")}`}</strong>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Customer Type</small>
+                      {getCustomerTypeBadge(customer.customer_type)}
+                    </div>
+                  </Col>
+                </Row>
 
-                {/* Address Information */}
-                <Col lg={7}>
-                  <Card className="border-0 bg-light rounded-4 mb-4">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaMapMarker className="me-2 text-secondary" /> Address Information
-                      </h5>
-                      <hr />
-                      {customer.address && (
-                        <div className="mb-3">
-                          <small className="text-muted d-block">Address</small>
-                          <strong>{customer.address}</strong>
-                        </div>
-                      )}
-                      {customer.landmark && (
-                        <div className="mb-3">
-                          <small className="text-muted d-block">Landmark</small>
-                          <strong>{customer.landmark}</strong>
-                        </div>
-                      )}
-
-                      <Row>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Country
-                            </small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.country ||
-                                customer.country_id ||
-                                "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">State</small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.state ||
-                                customer.state_id ||
-                                "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">City</small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.city || customer.city_id || "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Pincode
-                            </small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.pincode ||
-                                customer.pincode_id ||
-                                "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                      </Row>
-                    </Card.Body>
-                  </Card>
-
-                  {/* Credit Details */}
-                  <Card className="border-0 bg-light rounded-4">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaMoneyBillWave className="me-2 text-secondary" /> Credit Details
-                      </h5>
-                      <hr />
-                      <Row>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Credit Limit
-                            </small>
-                            <h5 className="mb-0" style={{ color: "#333" }}>
-                              ₹
-                              {parseFloat(
-                                customer.credit_limit || 0,
-                              ).toLocaleString()}
-                            </h5>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Credit Days
-                            </small>
-                            <h5 className="mb-0" style={{ color: "#333" }}>
-                              {customer.credit_days || 0} days
-                            </h5>
-                          </div>
-                        </Col>
-                      </Row>
-                      <div className="bg-white rounded-3 p-3 text-center">
-                        <small className="text-muted d-block">
-                          Available Credit
-                        </small>
-                        <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                          ₹{availableCredit.toLocaleString()}
-                        </h3>
-                        <small className="text-muted">
-                          Credit Limit - Outstanding Amount
-                        </small>
+                {/* Contact Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaPhone className="me-2" /> Contact Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Email Address</small>
+                      <div className="d-flex align-items-center">
+                        <strong>{customer.email || "N/A"}</strong>
+                        {getValidationIcon(emailValidation)}
                       </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
-
-              {/* Documents Section */}
-              <Row className="mt-4">
-                <Col md={12}>
-                  <Card className="border-0 bg-light rounded-4">
-                    <Card.Body>
-                      <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h5 className="fw-bold mb-0">
-                          <FaDownload className="me-2 text-secondary" /> Documents
-                        </h5>
-                        <Button
-                          size="sm"
-                          variant="outline-secondary"
-                          className="rounded-pill"
-                          onClick={() => setShowDocs(true)}
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Mobile Number</small>
+                      <div className="d-flex align-items-center">
+                        <strong>{customer.mobile || "N/A"}</strong>
+                        {getValidationIcon(mobileValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Alternate Mobile</small>
+                      <div className="d-flex align-items-center">
+                        <span
+                          style={{ cursor: "pointer" }}
+                          onClick={toggleAlternateMobileVisibility}
+                          className="me-1"
                         >
-                          View All ({customer.documents?.length || 0})
-                        </Button>
+                          <strong>{formatAlternateMobile(customer.alternate_mobile)}</strong>
+                        </span>
+                        {customer.alternate_mobile && (
+                          <Button variant="link" size="sm" onClick={toggleAlternateMobileVisibility} className="p-0 ms-1">
+                            {showFullAlternateMobile ? "Hide" : "Show"}
+                          </Button>
+                        )}
+                        {getValidationIcon(alternateMobileValidation)}
                       </div>
-                      <hr />
-                      {customer.documents && customer.documents.length > 0 ? (
-                        <div className="d-flex flex-wrap gap-2">
-                          {customer.documents.slice(0, 4).map((doc) => (
-                            <div
-                              key={doc.id}
-                              className="bg-white rounded-3 p-3 flex-grow-1"
-                            >
-                              <strong>{doc.name}</strong>
-                              <div className="small text-muted">
-                                {doc.upload_date || doc.uploadDate}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-muted text-center py-3">
-                          No documents uploaded
-                        </p>
-                      )}
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
+                    </div>
+                  </Col>
+                </Row>
 
-              {/* System Info */}
-              <Row className="mt-4">
-                <Col md={12}>
-                  <Card className="border-0 bg-light rounded-4">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaCalendarAlt className="me-2 text-secondary" /> System Information
-                      </h5>
-                      <hr />
-                      <Row>
-                        <Col md={4}>
-                          <small className="text-muted d-block">
-                            Created By
-                          </small>
-                          <strong>{customer.created_by || "System"}</strong>
-                        </Col>
-                        <Col md={4}>
-                          <small className="text-muted d-block">
-                            Created At
-                          </small>
-                          <strong>{formatDate(customer.created_at)}</strong>
-                        </Col>
-                        <Col md={4}>
-                          <small className="text-muted d-block">
-                            Last Updated
-                          </small>
-                          <strong>{formatDate(customer.updated_at)}</strong>
-                        </Col>
-                      </Row>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
+                {/* Tax Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaIdCard className="me-2" /> Tax Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>GST Number</small>
+                      <div className="d-flex align-items-center">
+                        <strong>{customer.gst_number || "N/A"}</strong>
+                        {getValidationIcon(gstValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>PAN Number</small>
+                      <div className="d-flex align-items-center">
+                        <strong>{customer.pan_number || "N/A"}</strong>
+                        {getValidationIcon(panValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Aadhaar Number</small>
+                      <div className="d-flex align-items-center">
+                        <span
+                          style={{ cursor: "pointer" }}
+                          onClick={toggleAadhaarVisibility}
+                          className="me-1"
+                        >
+                          <strong>{formatAadhaar(customer.aadhaar_number)}</strong>
+                        </span>
+                        {customer.aadhaar_number && (
+                          <Button variant="link" size="sm" onClick={toggleAadhaarVisibility} className="p-0 ms-1">
+                            {showFullAadhaar ? "Hide" : "Show"}
+                          </Button>
+                        )}
+                        {getValidationIcon(aadhaarValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                {/* Address Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaMapMarkerAlt className="me-2" /> Address Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3">
+                  <Col md={6}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Full Address</small>
+                      <strong>{customer.address || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={6}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Landmark</small>
+                      <strong>{customer.landmark || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Country</small>
+                      <strong>{loadingLocation ? <Spinner animation="border" size="sm" /> : locationNames.country || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>State</small>
+                      <strong>{loadingLocation ? <Spinner animation="border" size="sm" /> : locationNames.state || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>City</small>
+                      <strong>{loadingLocation ? <Spinner animation="border" size="sm" /> : locationNames.city || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Pincode</small>
+                      <strong>{loadingLocation ? <Spinner animation="border" size="sm" /> : locationNames.pincode || "N/A"}</strong>
+                    </div>
+                  </Col>
+                </Row>
+
+                {/* Financial Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaMoneyBillWave className="me-2" /> Financial Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3">
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Credit Limit</small>
+                      <strong>{formatCurrency(customer.credit_limit || 0)}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Outstanding Amount</small>
+                      <strong>{formatCurrency(customer.outstanding_amount || 0)}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Status</small>
+                      {getStatusBadge(customer.status)}
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Created On</small>
+                      <strong>{formatDate(customer.created_at)}</strong>
+                    </div>
+                  </Col>
+                </Row>
+              </div>
             </Tab>
 
-            <Tab eventKey="invoices" title="Invoice History" className="p-3">
-              <div className="text-center py-5">
+            <Tab
+              eventKey="invoices"
+              title={
+                <span className="fw-semibold">
+                  <FaFileInvoice className="me-2" /> Invoice History
+                </span>
+              }
+            >
+              <div className="p-5 text-center">
                 <FaFileInvoice size={60} className="text-muted mb-3" />
                 <h5 className="text-muted">No invoices found</h5>
-                <p className="text-muted small">
-                  Add invoices to see them here
-                </p>
+                <p className="text-muted small">Invoices will appear here once added</p>
               </div>
             </Tab>
           </Tabs>
-        </Card.Body>
+        </Card.Header>
       </Card>
 
-      {/* Document Viewer Modal */}
-      <DocumentViewer
-        show={showDocs}
-        onHide={() => setShowDocs(false)}
-        documents={customer.documents || []}
-        onUpload={handleUploadDocument}
-        onDelete={handleDeleteDocument}
-      />
+      <style>{`
+        .nav-tabs {
+          border-bottom: none !important;
+        }
+        .nav-tabs .nav-link {
+          border: none;
+          color: #6c757d;
+          padding: 10px 16px;
+          font-size: 14px;
+          transition: all 0.2s;
+          border-radius: 30px;
+          margin-right: 8px;
+        }
+        .nav-tabs .nav-link:hover {
+          color: rgb(30, 58, 111);
+          background: #f1f5f9;
+        }
+        .nav-tabs .nav-link.active {
+          color: rgb(30, 58, 111);
+          background: #eef2ff;
+          border: none;
+        }
+        .rounded-3 {
+          border-radius: 12px !important;
+        }
+      `}</style>
     </Container>
   );
 };

@@ -1,56 +1,107 @@
 import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Container,
-  Card,
   Row,
   Col,
+  Card,
   Button,
   Badge,
-  Table,
   Tabs,
   Tab,
   Alert,
-  Modal,
   Spinner,
-  Image,
+  OverlayTrigger,
+  Tooltip,
 } from "react-bootstrap";
-import { useNavigate, useParams } from "react-router-dom";
 import {
-  FaArrowLeft,
   FaEdit,
   FaTrash,
+  FaArrowLeft,
   FaEnvelope,
   FaPhone,
-  FaMapMarker,
+  FaMapMarkerAlt,
   FaBuilding,
+  FaCreditCard,
+  FaFileInvoice,
   FaCalendarAlt,
-  FaUser,
-  FaBriefcase,
+  FaUserCircle,
   FaIdCard,
-  FaHome,
-  FaFolderOpen,
-  FaRegFileAlt,
-  FaRegClock,
+  FaHashtag,
+  FaMoneyBill,
+  FaClock,
+  FaUser,
   FaCheckCircle,
   FaTimesCircle,
   FaGlobe,
   FaCity,
   FaMapPin,
+  FaLandmark,
   FaUserTag,
+  FaMobileAlt,
   FaCode,
-  FaRegCalendarAlt,
-  FaMapMarkerAlt,
-  FaSignOutAlt,
+  FaMoneyBillWave,
+  FaWallet,
+  FaInfoCircle,
+  FaExclamationTriangle,
+  FaBriefcase,
+  FaRupeeSign,
 } from "react-icons/fa";
+import {
+  getStaffById,
+  deleteStaff,
+} from "../../components/services/staffService";
 import Swal from "sweetalert2";
-import { getStaffById, deleteStaff } from "../../components/services/staffService";
+
+// Status color mapping - MATCHING STAFFMANAGEMENT PAGE
+const statusConfig = {
+  active: { bg: "#ECFDF3", color: "#027A48", label: "Active" },
+  inactive: { bg: "#FFDCE2", color: "#F94765", label: "Inactive" },
+};
+
+// Role color mapping - MATCHING STAFFMANAGEMENT PAGE
+const roleConfig = {
+  1: { bg: "#D3EAFF", color: "#437EF7", label: "Admin" },
+  2: { bg: "#FFE0CB", color: "#FF8532", label: "Accounts" },
+  3: { bg: "#FEF6D7", color: "#FED229", label: "Store Manager" },
+  4: { bg: "#ECFDF3", color: "#027A48", label: "Staff" },
+};
 
 const ViewStaff = () => {
-  const navigate = useNavigate();
   const { id } = useParams();
+  const navigate = useNavigate();
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Validation helper functions
+  const validateEmail = (email) => {
+    if (!email) return { isValid: null, message: "Not provided" };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(email)) {
+      return { isValid: true, message: "Valid Email" };
+    }
+    return { isValid: false, message: "Invalid Email Format" };
+  };
+
+  const validatePhone = (phone) => {
+    if (!phone) return { isValid: null, message: "Not provided" };
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (phoneRegex.test(phone)) {
+      return { isValid: true, message: "Valid Mobile Number" };
+    }
+    return { isValid: false, message: "Invalid Mobile Number" };
+  };
+
+  const getValidationIcon = (validation) => {
+    if (validation.isValid === null) {
+      return <FaInfoCircle className="text-secondary ms-2" size={14} title={validation.message} />;
+    }
+    if (validation.isValid) {
+      return <FaCheckCircle className="text-success ms-2" size={14} title={validation.message} />;
+    }
+    return <FaExclamationTriangle className="text-danger ms-2" size={14} title={validation.message} />;
+  };
 
   useEffect(() => {
     loadStaff();
@@ -58,16 +109,16 @@ const ViewStaff = () => {
 
   const loadStaff = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await getStaffById(id);
       console.log("Staff data:", data);
-      
+
       if (data) {
         const transformedStaff = {
           id: data.id,
           staff_code: data.staff_code,
           employee_id: data.employee_id,
-          tenant_id: data.tenant_id,
           first_name: data.first_name,
           last_name: data.last_name,
           name: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
@@ -76,10 +127,13 @@ const ViewStaff = () => {
           department: data.department,
           designation: data.designation,
           joining_date: data.joining_date,
-          joiningDate: data.joining_date ? new Date(data.joining_date).toLocaleDateString() : 'N/A',
+          joiningDate: data.joining_date ? new Date(data.joining_date).toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          }) : 'N/A',
           role_id: data.role_id,
           role_name: data.role_name,
-          role: data.role_id === 1 ? 'admin' : data.role_id === 2 ? 'accounts' : data.role_id === 3 ? 'store' : 'staff',
           status: data.status,
           address: data.address,
           city: data.city,
@@ -88,14 +142,10 @@ const ViewStaff = () => {
           zip_code: data.zip_code,
           profile_image: data.profile_image,
           email_verified: data.email_verified === 1,
-          last_login: data.last_login,
-          last_login_ip: data.last_login_ip,
-          created_by: data.created_by,
+          salary: data.salary || 0,
           created_at: data.created_at,
           updated_at: data.updated_at,
-          deleted_at: data.deleted_at,
-          salary: data.salary || 0,
-          staffId: data.staff_code,
+          created_by: data.created_by,
         };
         setStaff(transformedStaff);
       } else {
@@ -103,186 +153,124 @@ const ViewStaff = () => {
       }
     } catch (error) {
       console.error("Failed to load staff:", error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error!',
-        text: 'Failed to load staff details',
-        confirmButtonColor: '#4361ee'
-      });
-      setStaff(null);
+      setError(error.response?.data?.message || "Failed to load staff details");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    setShowDeleteConfirm(false);
-    
     const result = await Swal.fire({
-      title: 'Confirm Delete',
-      text: 'Are you sure you want to delete this staff member?',
-      icon: 'warning',
+      title: "Are you sure?",
+      text: `Delete staff member "${staff?.name}"?`,
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: '#4361ee',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: 'Yes, delete it!',
-      cancelButtonText: 'Cancel'
+      confirmButtonColor: "#6c757d",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, delete it!",
+      cancelButtonText: "Cancel",
     });
 
     if (result.isConfirmed) {
       try {
         await deleteStaff(id);
         Swal.fire({
-          icon: 'success',
-          title: 'Deleted!',
-          text: 'Staff member deleted successfully!',
+          icon: "success",
+          title: "Deleted!",
+          text: "Staff member has been deleted successfully",
           timer: 1500,
-          showConfirmButton: false
+          showConfirmButton: false,
         });
         navigate("/staffs");
       } catch (error) {
-        console.error("Failed to delete staff:", error);
         Swal.fire({
-          icon: 'error',
-          title: 'Error!',
-          text: 'Failed to delete staff member',
-          confirmButtonColor: '#4361ee'
+          icon: "error",
+          title: "Error!",
+          text: error.response?.data?.message || "Failed to delete staff member",
         });
       }
     }
   };
 
-  const getRoleBadge = (role_id, role_name) => {
-    const roles = {
-      1: { text: "Admin", color: "#dc3545" },
-      2: { text: "Accounts", color: "#17a2b8" },
-      3: { text: "Store Manager", color: "#28a745" },
-      4: { text: "Sales Staff", color: "#6c757d" },
-    };
-    const r = roles[role_id] || { text: role_name || "Staff", color: "#6c757d" };
-    return (
-      <span 
-        style={{ 
-          padding: "6px 12px", 
-          borderRadius: "20px", 
-          fontWeight: "500",
-          backgroundColor: r.color,
-          color: "white",
-          display: "inline-block",
-          fontSize: "12px"
-        }}
-      >
-        {r.text}
-      </span>
-    );
-  };
-
   const getStatusBadge = (status) => {
-    return status === "active" ? (
-      <span 
-        style={{ 
-          padding: "6px 12px", 
-          borderRadius: "20px", 
-          fontWeight: "500",
-          backgroundColor: "hsl(227, 81%, 42%)",
-          color: "white",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "6px",
-          fontSize: "12px"
+    const config = statusConfig[status?.toLowerCase()] || statusConfig.active;
+    return (
+      <span
+        style={{
+          backgroundColor: config.bg,
+          color: config.color,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          fontWeight: "600",
+          fontSize: "13px",
+          display: "inline-block",
         }}
       >
-        <FaCheckCircle size={12} /> Active
-      </span>
-    ) : (
-      <span 
-        style={{ 
-          padding: "6px 12px", 
-          borderRadius: "20px", 
-          fontWeight: "500",
-          backgroundColor: "#dc3545",
-          color: "white",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "6px",
-          fontSize: "12px"
-        }}
-      >
-        <FaTimesCircle size={12} /> Inactive
+        {config.label}
       </span>
     );
   };
 
-  const getEmailVerifiedBadge = (verified) => {
-    return verified ? (
-      <span 
-        style={{ 
-          backgroundColor: "#28a745", 
-          borderRadius: "50px", 
-          padding: "4px 10px",
-          fontSize: "10px",
-          color: "white",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "4px"
+  const getRoleBadge = (role_id, role_name) => {
+    const config = roleConfig[role_id] || { bg: "#F3F4F6", color: "#1e293b", label: role_name || "Staff" };
+    return (
+      <span
+        style={{
+          backgroundColor: config.bg,
+          color: config.color,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          fontWeight: "600",
+          fontSize: "13px",
+          display: "inline-block",
         }}
       >
-        <FaCheckCircle size={10} /> Verified
-      </span>
-    ) : (
-      <span 
-        style={{ 
-          backgroundColor: "#ffc107", 
-          borderRadius: "50px", 
-          padding: "4px 10px",
-          fontSize: "10px",
-          color: "#000",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "4px"
-        }}
-      >
-        Unverified
+        {config.label}
       </span>
     );
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleString();
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   };
 
-  const handleGoBack = () => {
-    navigate("/staffs");
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return "₹0";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
-  const handleDashboard = () => {
-    navigate("/dashboard");
-  };
+  const emailValidation = validateEmail(staff?.email);
+  const phoneValidation = validatePhone(staff?.phone);
 
   if (loading) {
     return (
-      <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      <Container fluid className="p-4" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
         <div className="text-center py-5">
-          <Spinner animation="border" variant="primary" size="lg" />
-          <h4 className="mt-3">Loading staff details...</h4>
+          <Spinner animation="border" variant="secondary" size="lg" />
+          <h5 className="mt-3 text-muted">Loading staff details...</h5>
         </div>
       </Container>
     );
   }
 
-  if (!staff) {
+  if (error || !staff) {
     return (
-      <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
-        <Alert variant="danger" className="text-center">
-          <h5>Staff Member Not Found</h5>
-          <p>The staff member you're looking for doesn't exist.</p>
-          <Button 
-            variant="primary" 
-            onClick={() => navigate("/staffs")}
-            style={{ backgroundColor: "#4361ee", border: "none" }}
-          >
-            Back to Staff
+      <Container fluid className="p-4" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+        <Alert variant="secondary" className="text-center">
+          <h4>Staff member not found</h4>
+          <p>{error || "The staff member you're looking for doesn't exist."}</p>
+          <Button variant="secondary" onClick={() => navigate("/staffs")}>
+            Back to Staffs
           </Button>
         </Alert>
       </Container>
@@ -291,419 +279,253 @@ const ViewStaff = () => {
 
   return (
     <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
-      {/* Back Button */}
-      <div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "12px" }}>
-        <button
-          onClick={handleGoBack}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#6c757d",
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "6px 12px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            transition: "all 0.3s"
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(67, 97, 238, 0.08)";
-            e.currentTarget.style.color = "#4361ee";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "#6c757d";
-          }}
-        >
-          <FaArrowLeft style={{ marginRight: "6px" }} /> Back to Staff
-        </button>
-        <button
-          onClick={handleDashboard}
-          style={{
-            background: "transparent",
-            border: "1px solid #6c757d",
-            color: "#6c757d",
-            borderRadius: "50px",
-            padding: "6px 16px",
-            fontSize: "14px",
-            cursor: "pointer",
-            transition: "all 0.3s"
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#6c757d";
-            e.currentTarget.style.color = "white";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "#6c757d";
-          }}
-        >
-          <FaHome style={{ marginRight: "6px" }} /> Dashboard
-        </button>
-      </div>
-
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+      <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 style={{ fontWeight: "bold", marginBottom: "4px", color: "#1a1a2e" }}>Staff Details</h2>
-          <p style={{ color: "#6c757d", marginBottom: 0 }}>View complete information about staff member</p>
+          <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
+            {staff.name}
+          </h2>
+          {/* <div className="d-flex align-items-center gap-2 flex-wrap mt-1">
+            <span className="text-muted" style={{ fontSize: "13px" }}>
+              <FaCode size={12} className="me-1" /> Code: {staff.staff_code || `STF-${String(staff.id).padStart(6, "0")}`}
+            </span>
+            <span>•</span>
+            {getRoleBadge(staff.role_id, staff.role_name)}
+            {getStatusBadge(staff.status)}
+          </div> */}
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button
+        <div className="d-flex gap-2">
+          <Button
             onClick={() => navigate(`/staffs/edit/${staff.id}`)}
             style={{
-              backgroundColor: "#4361ee",
+              backgroundColor: "rgb(30, 58, 111)",
               border: "none",
-              borderRadius: "8px",
+              borderRadius: "30px",
               padding: "8px 20px",
-              color: "white",
-              display: "inline-flex",
+              fontSize: "13px",
+              fontWeight: "600",
+              display: "flex",
               alignItems: "center",
               gap: "8px",
-              cursor: "pointer",
-              transition: "all 0.3s"
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#3451c4"}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#4361ee"}
           >
-            <FaEdit /> Edit Profile
-          </button>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            style={{
-              backgroundColor: "#dc3545",
-              border: "none",
-              borderRadius: "8px",
-              padding: "8px 20px",
-              color: "white",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              cursor: "pointer",
-              transition: "all 0.3s"
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#c82333"}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#dc3545"}
+            <FaEdit size={14} /> Edit
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs Section */}
+      <Card className="border-0 shadow-sm rounded-3">
+        <Card.Header className="bg-white border-0 pt-3 px-4">
+          <Tabs
+            defaultActiveKey="overview"
+            className="border-0 gap-2"
+            style={{ borderBottom: "2px solid #e9ecef" }}
           >
-            <FaTrash /> Delete
-          </button>
-        </div>
-      </div>
-
-      {/* Staff Info Header Card */}
-      <div style={{ 
-        backgroundColor: "white", 
-        borderRadius: "12px", 
-        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-        marginBottom: "24px",
-        padding: "24px"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "20px" }}>
-          {staff.profile_image && (
-            <img
-              src={staff.profile_image}
-              alt={staff.name}
-              style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "50%", border: "2px solid white", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
-            />
-          )}
-          <div>
-            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "8px" }}>
-              <h3 style={{ fontWeight: "bold", marginBottom: 0, color: "#1a1a2e" }}>{staff.name}</h3>
-              <span style={{ 
-                backgroundColor: "#6c757d", 
-                padding: "6px 12px", 
-                borderRadius: "20px", 
-                fontWeight: "500",
-                color: "white",
-                fontSize: "12px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px"
-              }}>
-                <FaCode size={12} /> {staff.staff_code}
-              </span>
-              {getStatusBadge(staff.status)}
-            </div>
-            <p style={{ color: "#6c757d", marginBottom: 0 }}>
-              <FaBriefcase style={{ marginRight: "8px" }} />
-              {staff.designation} • {staff.department} Department
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-        <div style={{ backgroundColor: "white", borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)", padding: "12px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <small style={{ color: "#6c757d", fontSize: "11px" }}>Staff Code</small>
-              <h6 style={{ marginBottom: 0, fontWeight: "bold", fontSize: "16px" }}>{staff.staff_code}</h6>
-            </div>
-            <div style={{ backgroundColor: "#e3f2fd", padding: "8px", borderRadius: "10px" }}>
-              <FaIdCard size={18} style={{ color: "#4361ee" }} />
-            </div>
-          </div>
-        </div>
-        <div style={{ backgroundColor: "white", borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)", padding: "12px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <small style={{ color: "#6c757d", fontSize: "11px" }}>Employee ID</small>
-              <h6 style={{ marginBottom: 0, fontWeight: "bold", fontSize: "16px" }}>{staff.employee_id || "N/A"}</h6>
-            </div>
-            <div style={{ backgroundColor: "#e8f5e9", padding: "8px", borderRadius: "10px" }}>
-              <FaRegCalendarAlt size={18} style={{ color: "#2e7d32" }} />
-            </div>
-          </div>
-        </div>
-        <div style={{ backgroundColor: "white", borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)", padding: "12px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <small style={{ color: "#6c757d", fontSize: "11px" }}>Joining Date</small>
-              <h6 style={{ marginBottom: 0, fontWeight: "bold", fontSize: "16px" }}>{staff.joiningDate}</h6>
-            </div>
-            <div style={{ backgroundColor: "#fff3e0", padding: "8px", borderRadius: "10px" }}>
-              <FaCalendarAlt size={18} style={{ color: "#ff9800" }} />
-            </div>
-          </div>
-        </div>
-        <div style={{ backgroundColor: "white", borderRadius: "10px", boxShadow: "0 1px 2px rgba(0,0,0,0.08)", padding: "12px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <small style={{ color: "#6c757d", fontSize: "11px" }}>Role</small>
-              <h6 style={{ marginBottom: 0, fontWeight: "bold", fontSize: "16px" }}>{staff.role_name || "Staff"}</h6>
-            </div>
-            <div style={{ backgroundColor: "#e8f5e9", padding: "8px", borderRadius: "10px" }}>
-              <FaUserTag size={18} style={{ color: "#2e7d32" }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", gap: "8px", borderBottom: "none" }}>
-          {["overview", "documents", "activity"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => {}}
-              style={{
-                border: "none",
-                padding: "10px 20px",
-                borderRadius: "8px",
-                fontWeight: "500",
-                transition: "all 0.2s",
-                cursor: "pointer",
-                backgroundColor: "transparent",
-                color: "#6c757d"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#e9ecef";
-                e.currentTarget.style.color = "#4361ee";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.color = "#6c757d";
-              }}
+            <Tab
+              eventKey="overview"
+              title={
+                <span className="fw-semibold">
+                  <FaUserCircle className="me-2" /> Overview
+                </span>
+              }
+              tabClassName="border-0"
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
+              <div className="p-3">
+                {/* Personal Information Section */}
+                <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaUser className="me-2" /> Personal Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>First Name</small>
+                      <strong>{staff.first_name}</strong>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Last Name</small>
+                      <strong>{staff.last_name || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Staff Code</small>
+                      <strong>{staff.staff_code || `STF-${String(staff.id).padStart(6, "0")}`}</strong>
+                    </div>
+                  </Col>
+                </Row>
 
-      {/* Overview Content */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(500px, 1fr))", gap: "24px", marginTop: "16px" }}>
-        {/* Personal Information */}
-        <div style={{ backgroundColor: "white", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", padding: "24px" }}>
-          <h6 style={{ fontWeight: "bold", marginBottom: "16px", color: "hsl(227, 81%, 42%)" }}>
-            <FaUser style={{ marginRight: "8px" }} /> Personal Information
-          </h6>
-          <hr style={{ margin: "0 0 16px 0" }} />
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>First Name</small>
-            <p style={{ fontWeight: "600", marginBottom: 0 }}>{staff.first_name}</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Last Name</small>
-            <p style={{ fontWeight: "600", marginBottom: 0 }}>{staff.last_name || "N/A"}</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Full Name</small>
-            <p style={{ fontWeight: "600", marginBottom: 0 }}>{staff.name}</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Email Address</small>
-            <p style={{ marginBottom: 0 }}>
-              <FaEnvelope style={{ marginRight: "8px", color: "#6c757d" }} />
-              {staff.email}
-              <span style={{ marginLeft: "8px" }}>{getEmailVerifiedBadge(staff.email_verified)}</span>
-            </p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Phone Number</small>
-            <p style={{ marginBottom: 0 }}>
-              <FaPhone style={{ marginRight: "8px", color: "#6c757d" }} />
-              {staff.phone}
-            </p>
-          </div>
-        </div>
+                {/* Contact Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaPhone className="me-2" /> Contact Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={6}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Email Address</small>
+                      <div className="d-flex align-items-center">
+                        <strong>{staff.email || "N/A"}</strong>
+                        {getValidationIcon(emailValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={6}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Phone Number</small>
+                      <div className="d-flex align-items-center">
+                        <strong>{staff.phone || "N/A"}</strong>
+                        {getValidationIcon(phoneValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
 
-        {/* Employment Information */}
-        <div style={{ backgroundColor: "white", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", padding: "24px" }}>
-          <h6 style={{ fontWeight: "bold", marginBottom: "16px", color: "hsl(227, 81%, 42%)" }}>
-            <FaBriefcase style={{ marginRight: "8px" }} /> Employment Information
-          </h6>
-          <hr style={{ margin: "0 0 16px 0" }} />
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Staff Code</small>
-            <p style={{ fontWeight: "600", marginBottom: 0 }}>{staff.staff_code}</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Employee ID</small>
-            <p style={{ marginBottom: 0 }}>{staff.employee_id || "N/A"}</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Designation</small>
-            <p style={{ marginBottom: 0 }}>{staff.designation}</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Department</small>
-            <p style={{ marginBottom: 0 }}>{staff.department}</p>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Role / Access Level</small>
-            <div style={{ marginTop: "8px" }}>{getRoleBadge(staff.role_id, staff.role_name)}</div>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <small style={{ color: "#6c757d" }}>Joining Date</small>
-            <p style={{ marginBottom: 0 }}>
-              <FaCalendarAlt style={{ marginRight: "8px", color: "#6c757d" }} />
-              {staff.joiningDate}
-            </p>
-          </div>
-          <div>
-            <small style={{ color: "#6c757d" }}>Status</small>
-            <div style={{ marginTop: "8px" }}>{getStatusBadge(staff.status)}</div>
-          </div>
-        </div>
+                {/* Employment Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaBriefcase className="me-2" /> Employment Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Designation</small>
+                      <strong>{staff.designation || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Department</small>
+                      <strong>{staff.department || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Joining Date</small>
+                      <strong>{staff.joiningDate}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Employee ID</small>
+                      <strong>{staff.employee_id || "N/A"}</strong>
+                    </div>
+                  </Col>
+                </Row>
 
-        {/* Address Information */}
-        <div style={{ backgroundColor: "white", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", padding: "24px", gridColumn: "1 / -1" }}>
-          <h6 style={{ fontWeight: "bold", marginBottom: "16px", color: "hsl(227, 81%, 42%)" }}>
-            <FaMapMarker style={{ marginRight: "8px" }} /> Address Information
-          </h6>
-          <hr style={{ margin: "0 0 16px 0" }} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-            <div>
-              <div style={{ marginBottom: "16px" }}>
-                <small style={{ color: "#6c757d" }}>Address</small>
-                <p style={{ marginBottom: 0 }}>{staff.address || "N/A"}</p>
-              </div>
-              <div style={{ marginBottom: "16px" }}>
-                <small style={{ color: "#6c757d" }}>City</small>
-                <p style={{ marginBottom: 0 }}>{staff.city || "N/A"}</p>
-              </div>
-              <div style={{ marginBottom: "16px" }}>
-                <small style={{ color: "#6c757d" }}>State</small>
-                <p style={{ marginBottom: 0 }}>{staff.state || "N/A"}</p>
-              </div>
-            </div>
-            <div>
-              <div style={{ marginBottom: "16px" }}>
-                <small style={{ color: "#6c757d" }}>Country</small>
-                <p style={{ marginBottom: 0 }}>{staff.country || "N/A"}</p>
-              </div>
-              <div style={{ marginBottom: "16px" }}>
-                <small style={{ color: "#6c757d" }}>Zip Code</small>
-                <p style={{ marginBottom: 0 }}>{staff.zip_code || "N/A"}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+                {/* Financial Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaRupeeSign className="me-2" /> Financial Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Salary</small>
+                      <strong>{formatCurrency(staff.salary)}</strong>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Role / Access Level</small>
+                      <div>{getRoleBadge(staff.role_id, staff.role_name)}</div>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Status</small>
+                      <div>{getStatusBadge(staff.status)}</div>
+                    </div>
+                  </Col>
+                </Row>
 
-        {/* System Information */}
-        <div style={{ backgroundColor: "white", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", padding: "24px", gridColumn: "1 / -1" }}>
-          <h6 style={{ fontWeight: "bold", marginBottom: "16px", color: "hsl(227, 81%, 42%)" }}>
-            <FaRegClock style={{ marginRight: "8px" }} /> System Information
-          </h6>
-          <hr style={{ margin: "0 0 16px 0" }} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-            <div>
-              <small style={{ color: "#6c757d" }}>Created By</small>
-              <p style={{ marginBottom: 0 }}>{staff.created_by || "System"}</p>
-            </div>
-            <div>
-              <small style={{ color: "#6c757d" }}>Created At</small>
-              <p style={{ marginBottom: 0 }}>{formatDate(staff.created_at)}</p>
-            </div>
-            <div>
-              <small style={{ color: "#6c757d" }}>Last Updated</small>
-              <p style={{ marginBottom: 0 }}>{formatDate(staff.updated_at)}</p>
-            </div>
-          </div>
-          {staff.last_login && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px", marginTop: "16px" }}>
-              <div>
-                <small style={{ color: "#6c757d" }}>Last Login</small>
-                <p style={{ marginBottom: 0 }}>{formatDate(staff.last_login)}</p>
+                {/* Address Information Section */}
+                <h6 className="fw-bold mb-3 mt-4" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaMapMarkerAlt className="me-2" /> Address Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3">
+                  <Col md={12}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Full Address</small>
+                      <strong>{staff.address || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Country</small>
+                      <strong>{staff.country || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>State</small>
+                      <strong>{staff.state || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>City</small>
+                      <strong>{staff.city || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small className="text-muted d-block" style={{ fontSize: "11px" }}>Zip Code</small>
+                      <strong>{staff.zip_code || "N/A"}</strong>
+                    </div>
+                  </Col>
+                </Row>
               </div>
-              <div>
-                <small style={{ color: "#6c757d" }}>Last Login IP</small>
-                <p style={{ marginBottom: 0 }}>{staff.last_login_ip || "N/A"}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+            </Tab>
 
-      {/* Delete Confirmation Modal */}
-      <Modal show={showDeleteConfirm} onHide={() => setShowDeleteConfirm(false)} centered>
-        <Modal.Header closeButton style={{ borderBottom: "none" }}>
-          <Modal.Title style={{ fontWeight: "bold" }}>
-            <FaTrash style={{ marginRight: "8px", color: "#dc3545" }} /> Confirm Delete
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p>
-            Are you sure you want to delete <strong>{staff.name}</strong>?
-          </p>
-          <Alert variant="danger" style={{ borderRadius: "12px" }}>
-            <small>
-              This action cannot be undone. All staff data will be permanently removed.
-            </small>
-          </Alert>
-        </Modal.Body>
-        <Modal.Footer style={{ backgroundColor: "#f8f9fa", borderTop: "none", borderRadius: "12px" }}>
-          <button
-            onClick={() => setShowDeleteConfirm(false)}
-            style={{
-              backgroundColor: "#6c757d",
-              border: "none",
-              borderRadius: "50px",
-              padding: "8px 24px",
-              color: "white",
-              cursor: "pointer"
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleDelete}
-            style={{
-              backgroundColor: "#dc3545",
-              border: "none",
-              borderRadius: "50px",
-              padding: "8px 24px",
-              color: "white",
-              cursor: "pointer"
-            }}
-          >
-            Delete Staff
-          </button>
-        </Modal.Footer>
-      </Modal>
+            <Tab
+              eventKey="documents"
+              title={
+                <span className="fw-semibold">
+                  <FaFileInvoice className="me-2" /> Documents
+                </span>
+              }
+            >
+              <div className="p-5 text-center">
+                <FaFileInvoice size={60} className="text-muted mb-3" />
+                <h5 className="text-muted">No documents found</h5>
+                <p className="text-muted small">Documents will appear here once added</p>
+              </div>
+            </Tab>
+          </Tabs>
+        </Card.Header>
+      </Card>
+
+      <style>{`
+        .nav-tabs {
+          border-bottom: none !important;
+        }
+        .nav-tabs .nav-link {
+          border: none;
+          color: #6c757d;
+          padding: 10px 16px;
+          font-size: 14px;
+          transition: all 0.2s;
+          border-radius: 30px;
+          margin-right: 8px;
+        }
+        .nav-tabs .nav-link:hover {
+          color: rgb(30, 58, 111);
+          background: #f1f5f9;
+        }
+        .nav-tabs .nav-link.active {
+          color: rgb(30, 58, 111);
+          background: #eef2ff;
+          border: none;
+        }
+        .rounded-3 {
+          border-radius: 12px !important;
+        }
+      `}</style>
     </Container>
   );
 };

@@ -19,15 +19,14 @@ import {
   FaEye,
   FaSearch,
   FaUsers,
-  FaStar,
   FaTrophy,
   FaFilter,
   FaTimes,
-  FaArrowLeft,
-  FaHome,
   FaUserCheck,
   FaRupeeSign,
-  FaSignOutAlt,
+  FaEnvelope,
+  FaCheckCircle,
+  FaPhone,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import {
@@ -38,6 +37,16 @@ import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Swal from "sweetalert2";
 
+// Status color mapping
+const statusConfig = {
+  active: { bg: "#ECFDF3", color: "#027A48", label: "Active" },
+  inactive: { bg: "#FFDCE2", color: "#F94765", label: "Inactive" },
+  pending: { bg: "#FEF6D7", color: "#FED229", label: "Pending" },
+  warning: { bg: "#FFE0CB", color: "#FF8532", label: "Warning" },
+  info: { bg: "#D3EAFF", color: "#437EF7", label: "Info" },
+  error: { bg: "#FFF2F0", color: "#E2341D", label: "Error" },
+};
+
 const Customers = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
@@ -47,6 +56,7 @@ const Customers = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [activeDropdown, setActiveDropdown] = useState(null);
 
   useEffect(() => {
     loadCustomers();
@@ -112,23 +122,27 @@ const Customers = () => {
         await loadCustomers();
       } catch (error) {
         console.error("Failed to delete customer:", error);
-        
-        // Check for foreign key constraint error (customer has orders)
+
         const errorMsg = error.response?.data?.message || error.message || "";
-        
-        if (errorMsg.includes("foreign key constraint") || 
-            errorMsg.includes("cannot delete") ||
-            errorMsg.includes("orders_ibfk_1")) {
-          toast.warning(`⚠️ Cannot delete "${customerName}" because they have existing orders. Please delete the orders first or mark customer as inactive.`, {
-            position: "top-right",
-            autoClose: 5000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            theme: "colored",
-            transition: Bounce,
-          });
+
+        if (
+          errorMsg.includes("foreign key constraint") ||
+          errorMsg.includes("cannot delete") ||
+          errorMsg.includes("orders_ibfk_1")
+        ) {
+          toast.warning(
+            `⚠️ Cannot delete "${customerName}" because they have existing orders. Please delete the orders first or mark customer as inactive.`,
+            {
+              position: "top-right",
+              autoClose: 5000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: "colored",
+              transition: Bounce,
+            },
+          );
         } else {
           toast.error(`✗ ${errorMsg || "Failed to delete customer"}`, {
             position: "top-right",
@@ -151,7 +165,6 @@ const Customers = () => {
     setStatus("all");
   };
 
-  // Filter customers
   const filteredCustomers = customers.filter((customer) => {
     const matchesSearch =
       searchTerm === "" ||
@@ -165,11 +178,7 @@ const Customers = () => {
       (customer.customer_code &&
         customer.customer_code
           .toLowerCase()
-          .includes(searchTerm.toLowerCase())) ||
-      (customer.landmark &&
-        customer.landmark.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (customer.address &&
-        customer.address.toLowerCase().includes(searchTerm.toLowerCase()));
+          .includes(searchTerm.toLowerCase()));
 
     const matchesType =
       customerType === "all" || customer.customer_type === customerType;
@@ -187,7 +196,6 @@ const Customers = () => {
     return types[type] || types.regular;
   };
 
-  // Stats
   const stats = {
     total: customers.length,
     active: customers.filter((c) => c.status === "active").length,
@@ -205,8 +213,14 @@ const Customers = () => {
     return filters;
   };
 
-  const handleGoBack = () => {
-    navigate("/dashboard");
+  const formatDate = (dateString) => {
+    if (!dateString) return "Recently";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
   if (loading) {
@@ -253,27 +267,6 @@ const Customers = () => {
         transition={Bounce}
       />
 
-      {/* Back Button */}
-      <div className="mb-3 d-flex align-items-center gap-3">
-        <Button
-          variant="link"
-          className="text-decoration-none d-flex align-items-center"
-          onClick={handleGoBack}
-          style={{ color: "#6c757d" }}
-        >
-          <FaSignOutAlt className="me-1" /> Back to Dashboard{" "}
-        </Button>
-        <Button
-          variant="outline-secondary"
-          size="sm"
-          className="rounded-pill"
-          onClick={() => navigate("/dashboard")}
-        >
-          <FaHome className="me-1" /> Dashboard
-        </Button>
-      </div>
-
-      {/* Success Message */}
       {successMessage && (
         <Alert
           variant="success"
@@ -285,7 +278,6 @@ const Customers = () => {
         </Alert>
       )}
 
-      {/* Error Message */}
       {errorMessage && (
         <Alert
           variant="danger"
@@ -300,29 +292,29 @@ const Customers = () => {
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
-            {/* GST Billing */}
+          {/* <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
+            Customers
           </h2>
+          <p className="text-muted mb-0">Manage your customer database</p> */}
         </div>
         <Button
-          variant="secondary"
           onClick={handleAddCustomer}
           style={{
-            backgroundColor: "#6c757d",
+            backgroundColor: "rgb(30, 58, 111)",
             border: "none",
-            borderRadius: "8px",
+            borderRadius: "14px",
+            padding: "12px 22px",
+            fontWeight: "600",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
           }}
         >
-          <FaPlus className="me-2" /> Add Customer
+          <FaPlus size={14} />
+          Add Customer
         </Button>
-      </div>
-
-      {/* Customers Section Title */}
-      <div className="mb-3">
-        <h3 className="fw-bold mb-0">Customers</h3>
-        <p className="text-muted mb-0">
-          Manage your customer database, view purchase history and documents
-        </p>
       </div>
 
       {/* Stats Cards */}
@@ -347,18 +339,15 @@ const Customers = () => {
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     {stats.total}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Total: {stats.total}
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#e3f2fd",
+                    backgroundColor: "#FFDCE2",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaUsers size={18} style={{ color: "#4361ee" }} />
+                  <FaUsers size={18} style={{ color: "#F94765" }} />
                 </div>
               </div>
             </Card.Body>
@@ -385,18 +374,15 @@ const Customers = () => {
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     {stats.active}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Active: {stats.active}
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#e8f5e9",
+                    backgroundColor: "#FEF6D7",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaUserCheck size={18} style={{ color: "#4c08ec" }} />
+                  <FaUserCheck size={18} style={{ color: "#FED229" }} />
                 </div>
               </div>
             </Card.Body>
@@ -423,18 +409,15 @@ const Customers = () => {
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     {stats.premium}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Premium: {stats.premium}
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#fff3e0",
+                    backgroundColor: "#FFE0CB",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaTrophy size={18} style={{ color: "#ff9800" }} />
+                  <FaTrophy size={18} style={{ color: "#FF8532" }} />
                 </div>
               </div>
             </Card.Body>
@@ -456,23 +439,20 @@ const Customers = () => {
                     className="text-muted mb-0"
                     style={{ fontSize: "11px" }}
                   >
-                    Total Sales Value
+                    Total Sales
                   </small>
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     ₹{stats.totalSales.toLocaleString()}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Lifetime revenue
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#e8f5e9",
+                    backgroundColor: "#D3EAFF",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaRupeeSign size={18} style={{ color: "#2e7d32" }} />
+                  <FaRupeeSign size={18} style={{ color: "#437EF7" }} />
                 </div>
               </div>
             </Card.Body>
@@ -487,7 +467,7 @@ const Customers = () => {
       >
         <Card.Body className="py-3">
           <Row>
-            <Col md={5}>
+            <Col md={3}>
               <InputGroup>
                 <InputGroup.Text
                   style={{ backgroundColor: "#fff", borderRight: "none" }}
@@ -496,7 +476,7 @@ const Customers = () => {
                 </InputGroup.Text>
                 <Form.Control
                   type="text"
-                  placeholder="Search customers..."
+                  placeholder="Search by name, email, mobile, GST..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ borderLeft: "none" }}
@@ -516,7 +496,7 @@ const Customers = () => {
                 value={customerType}
                 onChange={(e) => setCustomerType(e.target.value)}
               >
-                <option value="all">All Customer Types ({stats.total})</option>
+                <option value="all">All Types ({stats.total})</option>
                 <option value="premium">Premium ({stats.premium})</option>
                 <option value="wholesale">Wholesale ({stats.wholesale})</option>
                 <option value="regular">Regular ({stats.regular})</option>
@@ -540,14 +520,13 @@ const Customers = () => {
                 variant="outline-secondary"
                 onClick={clearFilters}
                 className="w-100"
-                title="Clear all filters"
+                title="Clear filters"
               >
                 <FaFilter />
               </Button>
             </Col>
           </Row>
 
-          {/* Active Filters Display */}
           {getFilterText().length > 0 && (
             <div className="mt-3 pt-2 border-top">
               <small className="text-muted me-2">Active filters:</small>
@@ -584,11 +563,6 @@ const Customers = () => {
         <p className="text-muted mb-0">
           Showing {filteredCustomers.length} of {customers.length} customers
         </p>
-        {filteredCustomers.length === 0 && (
-          <Button variant="link" onClick={clearFilters} className="p-0">
-            Clear all filters
-          </Button>
-        )}
       </div>
 
       {/* Customers Table */}
@@ -610,161 +584,262 @@ const Customers = () => {
                 }}
               >
                 <tr>
-                  <th style={{ padding: "16px 12px" }}>Customer Code</th>
-                  <th style={{ padding: "16px 12px" }}>Customer Name</th>
-                  <th style={{ padding: "16px 12px" }}>Contact Info</th>
-                  <th style={{ padding: "16px 12px" }}>GST / PAN / Aadhaar</th>
-                  <th style={{ padding: "16px 12px" }}>Customer Type</th>
-                  <th style={{ padding: "16px 12px" }}>Credit Limit</th>
-                  <th style={{ padding: "16px 12px" }}>Outstanding</th>
+                  <th style={{ padding: "16px 12px" }}>Customer</th>
+                  <th style={{ padding: "16px 12px" }}>Contact</th>
+                  <th style={{ padding: "16px 12px" }}>GSTIN</th>
+                  <th style={{ padding: "16px 12px" }}>Location</th>
+                  {/* <th style={{ padding: "16px 12px" }}>Total Purchases</th> */}
                   <th style={{ padding: "16px 12px" }}>Status</th>
                   <th style={{ padding: "16px 12px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCustomers.map((customer) => {
-                  const customerTypeBadge = getCustomerTypeBadge(
-                    customer.customer_type,
-                  );
+                  const sinceDate = formatDate(customer.created_at);
                   return (
                     <tr
                       key={customer.id}
                       style={{ borderBottom: "1px solid #e9ecef" }}
                     >
-                      <td style={{ padding: "16px 12px" }}>
-                        <div className="fw-semibold">
-                          {customer.customer_code}
-                        </div>
-                        <small className="text-muted">ID: {customer.id}</small>
-                      </td>
+                      {/* Customer Name with Since Date */}
                       <td style={{ padding: "16px 12px" }}>
                         <div className="fw-semibold">{customer.name}</div>
-                        <small className="text-muted">
-                          {customer.landmark || ""}
-                        </small>
+                        <small className="text-muted">Since {sinceDate}</small>
                       </td>
+
+                      {/* Contact with Email and Phone */}
                       <td style={{ padding: "16px 12px" }}>
-                        <div>
-                          <small>{customer.email}</small>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <FaEnvelope size={12} color="#64748b" />
+                          <small style={{ color: "#1e293b" }}>
+                            {customer.email}
+                          </small>
+                          {customer.email_verified && (
+                            <FaCheckCircle size={12} color="#027A48" />
+                          )}
                         </div>
-                        <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <FaPhone size={12} color="#64748b" />
                           <small>{customer.mobile}</small>
                         </div>
-                        {customer.alternate_mobile && (
-                          <div>
-                            <small>Alt: {customer.alternate_mobile}</small>
-                          </div>
-                        )}
                       </td>
+
+                      {/* GSTIN */}
                       <td style={{ padding: "16px 12px" }}>
-                        <div>
-                          <small className="text-muted">
-                            GST: {customer.gst_number || "N/A"}
-                          </small>
-                        </div>
-                        <div>
-                          <small className="text-muted">
-                            PAN: {customer.pan_number || "N/A"}
-                          </small>
-                        </div>
-                        <div>
-                          <small className="text-muted">
-                            Aadhaar: {customer.aadhaar_number || "N/A"}
-                          </small>
-                        </div>
-                      </td>
-                      <td style={{ padding: "16px 12px" }}>
-                        <Badge
-                          bg={customerTypeBadge.color}
+                        <span
                           style={{
+                            backgroundColor: "hsl(214 32% 94%)",
+                            color: "#333333",
                             padding: "6px 12px",
-                            borderRadius: "20px",
-                            fontWeight: "500",
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            display: "inline-block",
                           }}
                         >
-                          {customerTypeBadge.text}
-                        </Badge>
-                        {customer.credit_days > 0 && (
-                          <div>
-                            <small className="text-muted">
-                              {customer.credit_days} days
-                            </small>
-                          </div>
-                        )}
+                          {customer.gst_number || "N/A"}
+                        </span>
                       </td>
-                      <td
-                        className="fw-semibold"
-                        style={{ padding: "16px 12px" }}
-                      >
-                        ₹{customer.credit_limit?.toLocaleString() || 0}
-                      </td>
-                      <td
-                        style={{
-                          padding: "16px 12px",
-                          color:
-                            customer.outstanding_amount > 0
-                              ? "#000000"
-                              : "#000000",
-                          fontWeight: "600",
-                        }}
-                      >
-                        ₹{customer.outstanding_amount?.toLocaleString() || 0}
-                      </td>
+
+                      {/* Location */}
                       <td style={{ padding: "16px 12px" }}>
-                        <Badge
+                        <div
+                          className="fw-semibold"
+                          style={{ fontSize: "14px", color: "#1e293b" }}
+                        >
+                          {customer.address || "No address"}
+                        </div>
+                      </td>
+
+                      {/* Total Purchases */}
+                      {/* <td style={{ padding: "16px 12px" }}>
+                        <div
+                          className="fw-semibold"
+                          style={{ color: "#027A48" }}
+                        >
+                          ₹{(customer.total_purchases || 0).toLocaleString()}
+                        </div>
+                      </td> */}
+
+                      {/* Status - Changed to span like Expenses list */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span
                           style={{
-                            padding: "6px 12px",
+                            padding: "6px 14px",
                             borderRadius: "20px",
-                            fontWeight: "500",
-                            backgroundColor:
-                              customer.status === "active"
-                                ? "hsl(227, 81%, 42%)"
-                                : customer.status === "inactive"
-                                  ? "#dc3545"
-                                  : "#6c757d",
-                            color: "#ffffff",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            backgroundColor: statusConfig[customer.status]?.bg || "#f3f4f6",
+                            color: statusConfig[customer.status]?.color || "#000000",
+                            border: "none",
+                            display: "inline-block",
                           }}
                         >
-                          {customer.status}
-                        </Badge>
-                      </td>
+                          {statusConfig[customer.status]?.label || customer.status}
+                        </span>
+                       </td>
+
+                      {/* Actions Dropdown */}
                       <td style={{ padding: "16px 12px" }}>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="me-2"
-                          onClick={() => handleViewDetails(customer.id)}
-                          title="View Details"
-                          style={{ color: "#4361ee", textDecoration: "none" }}
-                        >
-                          <FaEye />
-                        </Button>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="me-2"
-                          onClick={() => handleEdit(customer.id)}
-                          title="Edit"
-                          style={{ color: "#ff9800", textDecoration: "none" }}
-                        >
-                          <FaEdit />
-                        </Button>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => handleDelete(customer.id, customer.name)}
-                          title="Delete"
-                          style={{ color: "#dc3545", textDecoration: "none" }}
-                        >
-                          <FaTrash />
-                        </Button>
-                      </td>
+                        <div className="action-dropdown">
+                          <button
+                            className="action-trigger"
+                            onClick={() =>
+                              setActiveDropdown(
+                                activeDropdown === customer.id
+                                  ? null
+                                  : customer.id,
+                              )
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "4px",
+                              borderRadius: "6px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "background-color 0.2s",
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "#f1f5f9")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "transparent")
+                            }
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                cx="12"
+                                cy="6"
+                                r="2"
+                                fill="currentColor"
+                              />
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="2"
+                                fill="currentColor"
+                              />
+                              <circle
+                                cx="12"
+                                cy="18"
+                                r="2"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </button>
+
+                          {activeDropdown === customer.id && (
+                            <div className="dropdown-menu-custom">
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleViewDetails(customer.id);
+                                }}
+                                className="dropdown-item-custom"
+                                title="View Details"
+                              >
+                                <FaEye
+                                  style={{ color: "#4361ee", fontSize: "14px" }}
+                                />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleEdit(customer.id);
+                                }}
+                                className="dropdown-item-custom"
+                                title="Edit"
+                              >
+                                <FaEdit
+                                  style={{ color: "#ff9800", fontSize: "14px" }}
+                                />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleDelete(customer.id, customer.name);
+                                }}
+                                className="dropdown-item-custom delete"
+                                title="Delete"
+                              >
+                                <FaTrash
+                                  style={{ color: "#dc3545", fontSize: "14px" }}
+                                />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <style>{`
+                          .action-dropdown { position: relative; }
+                          .action-trigger { color: #64748b; transition: all 0.2s; }
+                          .action-trigger:hover { color: #1e293b; }
+                          .dropdown-menu-custom {
+                            position: absolute;
+                            top: 100%;
+                            right: 0;
+                            margin-top: 4px;
+                            min-width: 40px;
+                            background: white;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            z-index: 1000;
+                            overflow: hidden;
+                            animation: dropdownSlide 0.2s ease;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 2px;
+                            padding: 4px;
+                          }
+                          @keyframes dropdownSlide {
+                            from { opacity: 0; transform: translateY(-5px); }
+                            to { opacity: 1; transform: translateY(0); }
+                          }
+                          .dropdown-item-custom {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            width: 100%;
+                            padding: 6px;
+                            border: none;
+                            background: white;
+                            cursor: pointer;
+                            transition: background-color 0.2s;
+                            border-radius: 6px;
+                          }
+                          .dropdown-item-custom:hover { background-color: #f8fafc; }
+                          .dropdown-item-custom.delete:hover { background-color: #fef2f2; }
+                        `}</style>
+                       </td>
                     </tr>
                   );
                 })}
                 {filteredCustomers.length === 0 && (
                   <tr>
-                    <td colSpan="9" className="text-center py-5">
+                    <td colSpan="6" className="text-center py-5">
                       <div className="py-4">
                         <FaSearch size={40} className="text-muted mb-3" />
                         <h5 className="text-muted">No customers found</h5>

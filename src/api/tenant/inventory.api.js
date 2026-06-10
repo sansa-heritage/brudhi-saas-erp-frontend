@@ -22,4 +22,3 @@ export const completeStockTransfer = (id) => apiClient.put(`/inventory/transfers
 
 // Inventory Reports
 export const getInventorySummary = () => apiClient.get('/inventory/summary');
-

@@ -55,6 +55,15 @@ import {
   FaShoppingCart,
   FaReceipt,
   FaFilePdf,
+  FaDownload,
+  FaPlusCircle,
+  FaEdit,
+  FaEye,
+  FaGift,
+  FaCheckCircle,
+  FaAward,
+  FaTrophy,
+  FaUser,
 } from "react-icons/fa";
 
 const Sidebar = () => {
@@ -182,13 +191,24 @@ const Sidebar = () => {
 
     // Masters Menu
     {
-      name: "Masters",
+      name: "Master",
       icon: <FaLayerGroup />,
       children: [
         { path: "/customers", name: "Customers", icon: <FaUsers /> },
         { path: "/dealers", name: "Dealers", icon: <FaUserTie /> },
-        { path: "/staffs", name: "Staff", icon: <FaUserFriends /> },
-        { path: "/products", name: "Products", icon: <FaBoxes /> },
+        {
+          name: "Staff",
+          icon: <FaUserFriends />,
+          children: [
+            { path: "/staffs", name: "Employee", icon: <FaUser /> },
+            {
+              path: "/staff/payroll",
+              name: "Payroll",
+              icon: <FaMoneyBillWave />,
+            },
+            { path: "/staff/bonuses", name: "Bonus", icon: <FaGift /> },
+          ],
+        },
       ],
     },
 
@@ -204,32 +224,14 @@ const Sidebar = () => {
       ],
     },
 
-    // Documents Menu
-    {
-      name: "Documents",
-      icon: <FaFolderOpen />,
-      children: [
-        { path: "/documents", name: "All Documents", icon: <FaFileAlt /> },
-        {
-          path: "/documents/customers",
-          name: "Customer Docs",
-          icon: <FaUsers />,
-        },
-        {
-          path: "/documents/dealers",
-          name: "Dealer Docs",
-          icon: <FaUserTie />,
-        },
-        {
-          path: "/documents/company",
-          name: "Company Docs",
-          icon: <FaBuilding />,
-        },
-      ],
-    },
-
     // Reports
     { path: "/reports", name: "Reports", icon: <FaChartLine /> },
+
+    {
+      path: "/company-setting",
+      name: "Company Setting",
+      icon: <FaCogs />,
+    },
   ];
 
   // ✅ Super Admin Menu (with similar structure)

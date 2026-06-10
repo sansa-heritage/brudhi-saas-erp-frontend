@@ -22,36 +22,51 @@ import {
   FaTrophy,
   FaFilter,
   FaTimes,
-  FaHome,
   FaUserCheck,
   FaRupeeSign,
-  FaSignOutAlt,
-  FaUserTie,
   FaEnvelope,
+  FaCheckCircle,
   FaPhone,
+  FaUserTie,
+  FaChartLine,
+  FaPercent,
   FaUserShield,
-  FaIdCard,
   FaCalendarAlt,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import { ToastContainer, toast, Bounce } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import Swal from "sweetalert2";
 import {
   getStaff,
   deleteStaff,
   getStaffStatistics,
 } from "../../components/services/staffService";
+import { ToastContainer, toast, Bounce } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import Swal from "sweetalert2";
+
+// Status color mapping - MATCHING DEALERS PAGE
+const statusConfig = {
+  active: { bg: "#ECFDF3", color: "#027A48", label: "Active" },
+  inactive: { bg: "#FFDCE2", color: "#F94765", label: "Inactive" },
+};
+
+// Role color mapping - MATCHING DEALERS PAGE DEALER TYPE COLORS
+const roleConfig = {
+  1: { bg: "#D3EAFF", color: "#437EF7", label: "Admin" },
+  2: { bg: "#FFE0CB", color: "#FF8532", label: "Accounts" },
+  3: { bg: "#FEF6D7", color: "#FED229", label: "Store Manager" },
+  4: { bg: "#ECFDF3", color: "#027A48", label: "Staff" },
+};
 
 const StaffManagement = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [status, setStatus] = useState("all");
   const [staff, setStaff] = useState([]);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [activeDropdown, setActiveDropdown] = useState(null);
   const [stats, setStats] = useState({
     totalStaff: 0,
     activeStaff: 0,
@@ -109,22 +124,8 @@ const StaffManagement = () => {
             designation: member.designation,
             joining_date: member.joining_date,
             role_id: member.role_id,
-            role:
-              member.role_id === 1
-                ? "admin"
-                : member.role_id === 2
-                  ? "accounts"
-                  : member.role_id === 3
-                    ? "store"
-                    : "staff",
+            role: member.role,
             status: member.status,
-            address: member.address,
-            city: member.city,
-            state: member.state,
-            country: member.country,
-            zip_code: member.zip_code,
-            profile_image: member.profile_image,
-            email_verified: member.email_verified,
             salary: member.salary || 0,
             created_at: member.created_at,
           }))
@@ -211,23 +212,26 @@ const StaffManagement = () => {
         await loadStats();
       } catch (error) {
         console.error("Failed to delete staff:", error);
-        
         const errorMsg = error.response?.data?.message || error.message || "";
-        
-        // Check for foreign key constraint error
-        if (errorMsg.includes("foreign key constraint") || 
-            errorMsg.includes("cannot delete") ||
-            errorMsg.includes("orders_ibfk")) {
-          toast.warning(`⚠️ Cannot delete "${staffName}" because they have associated records. Please remove associated records first or mark as inactive.`, {
-            position: "top-right",
-            autoClose: 5000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            theme: "colored",
-            transition: Bounce,
-          });
+
+        if (
+          errorMsg.includes("foreign key constraint") ||
+          errorMsg.includes("cannot delete") ||
+          errorMsg.includes("orders_ibfk")
+        ) {
+          toast.warning(
+            `⚠️ Cannot delete "${staffName}" because they have associated records. Please remove associated records first or mark as inactive.`,
+            {
+              position: "top-right",
+              autoClose: 5000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: "colored",
+              transition: Bounce,
+            },
+          );
         } else {
           toast.error(`✗ ${errorMsg || "Failed to delete staff member"}`, {
             position: "top-right",
@@ -246,77 +250,48 @@ const StaffManagement = () => {
 
   const clearFilters = () => {
     setSearchTerm("");
-    setDepartmentFilter("all");
+    setRoleFilter("all");
     setStatus("all");
   };
 
-  // Filter staff
   const filteredStaff = staff.filter((member) => {
     const matchesSearch =
       searchTerm === "" ||
       (member.name &&
         member.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (member.first_name &&
-        member.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (member.last_name &&
-        member.last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (member.email &&
         member.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (member.phone && member.phone.includes(searchTerm)) ||
       (member.staff_code &&
         member.staff_code.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (member.employee_id &&
-        member.employee_id.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (member.phone && member.phone.includes(searchTerm)) ||
       (member.designation &&
         member.designation.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = status === "all" || member.status === status;
-    const matchesDepartment =
-      departmentFilter === "all" || member.department === departmentFilter;
+    const matchesRole = roleFilter === "all" || member.role_id === parseInt(roleFilter);
 
-    return matchesSearch && matchesStatus && matchesDepartment;
+    return matchesSearch && matchesStatus && matchesRole;
   });
-
-  const getRoleBadge = (role_id, role) => {
-    const roles = {
-      1: { text: "Admin", color: "danger" },
-      2: { text: "Accounts", color: "info" },
-      3: { text: "Store Manager", color: "success" },
-      4: { text: "Staff", color: "secondary" },
-    };
-    const r = roles[role_id] || { text: role || "Staff", color: "secondary" };
-    return (
-      <Badge
-        bg={r.color}
-        style={{ padding: "6px 12px", borderRadius: "20px", fontWeight: "500" }}
-      >
-        {r.text}
-      </Badge>
-    );
-  };
-
-  const getStatusBadge = (status) => {
-    return (
-      <Badge
-        bg={status === "active" ? "success" : "danger"}
-        style={{ padding: "6px 12px", borderRadius: "20px", fontWeight: "500" }}
-      >
-        {status === "active" ? "Active" : "Inactive"}
-      </Badge>
-    );
-  };
 
   const getFilterText = () => {
     const filters = [];
-    if (departmentFilter !== "all")
-      filters.push(`Department: ${departmentFilter}`);
+    if (roleFilter !== "all") {
+      const roleName = roleConfig[roleFilter]?.label || roleFilter;
+      filters.push(`Role: ${roleName}`);
+    }
     if (status !== "all") filters.push(`Status: ${status}`);
     if (searchTerm) filters.push(`Search: "${searchTerm}"`);
     return filters;
   };
 
-  const handleGoBack = () => {
-    navigate("/dashboard");
+  const formatDate = (dateString) => {
+    if (!dateString) return "Recently";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
   if (loading) {
@@ -363,27 +338,6 @@ const StaffManagement = () => {
         transition={Bounce}
       />
 
-      {/* Back Button */}
-      <div className="mb-3 d-flex align-items-center gap-3">
-        <Button
-          variant="link"
-          className="text-decoration-none d-flex align-items-center"
-          onClick={handleGoBack}
-          style={{ color: "#6c757d" }}
-        >
-          <FaSignOutAlt className="me-1" /> Back to Dashboard
-        </Button>
-        <Button
-          variant="outline-secondary"
-          size="sm"
-          className="rounded-pill"
-          onClick={() => navigate("/dashboard")}
-        >
-          <FaHome className="me-1" /> Dashboard
-        </Button>
-      </div>
-
-      {/* Success Message */}
       {successMessage && (
         <Alert
           variant="success"
@@ -395,7 +349,6 @@ const StaffManagement = () => {
         </Alert>
       )}
 
-      {/* Error Message */}
       {errorMessage && (
         <Alert
           variant="danger"
@@ -410,29 +363,29 @@ const StaffManagement = () => {
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
-            {/* GST Billing */}
+          {/* <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
+            Staff Members
           </h2>
+          <p className="text-muted mb-0">Manage your team members</p> */}
         </div>
         <Button
-          variant="secondary"
           onClick={handleAddStaff}
           style={{
-            backgroundColor: "#6c757d",
+            backgroundColor: "rgb(30, 58, 111)",
             border: "none",
-            borderRadius: "8px",
+            borderRadius: "14px",
+            padding: "12px 22px",
+            fontWeight: "600",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
           }}
         >
-          <FaPlus className="me-2" /> Add Staff
+          <FaPlus size={14} />
+          Add Staff
         </Button>
-      </div>
-
-      {/* Staff Section Title */}
-      <div className="mb-3">
-        <h3 className="fw-bold mb-0">Staff Members</h3>
-        <p className="text-muted mb-0">
-          Manage your team members, roles and permissions
-        </p>
       </div>
 
       {/* Stats Cards */}
@@ -448,27 +401,21 @@ const StaffManagement = () => {
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small
-                    className="text-muted mb-0"
-                    style={{ fontSize: "11px" }}
-                  >
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
                     Total Staff
                   </small>
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     {stats.totalStaff}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Total: {stats.totalStaff}
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#e3f2fd",
+                    backgroundColor: "#FFDCE2",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaUsers size={18} style={{ color: "#4361ee" }} />
+                  <FaUsers size={18} style={{ color: "#F94765" }} />
                 </div>
               </div>
             </Card.Body>
@@ -486,27 +433,21 @@ const StaffManagement = () => {
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small
-                    className="text-muted mb-0"
-                    style={{ fontSize: "11px" }}
-                  >
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
                     Active Staff
                   </small>
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     {stats.activeStaff}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Active: {stats.activeStaff}
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#e8f5e9",
+                    backgroundColor: "#FEF6D7",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaUserCheck size={18} style={{ color: "#2e7d32" }} />
+                  <FaUserCheck size={18} style={{ color: "#FED229" }} />
                 </div>
               </div>
             </Card.Body>
@@ -524,27 +465,21 @@ const StaffManagement = () => {
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small
-                    className="text-muted mb-0"
-                    style={{ fontSize: "11px" }}
-                  >
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
                     Total Roles
                   </small>
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     {stats.totalRoles}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Roles: {stats.totalRoles}
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#fff3e0",
+                    backgroundColor: "#FFE0CB",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaUserShield size={18} style={{ color: "#ff9800" }} />
+                  <FaUserShield size={18} style={{ color: "#FF8532" }} />
                 </div>
               </div>
             </Card.Body>
@@ -562,27 +497,21 @@ const StaffManagement = () => {
             <Card.Body className="py-2 px-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <small
-                    className="text-muted mb-0"
-                    style={{ fontSize: "11px" }}
-                  >
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
                     Monthly Salary
                   </small>
                   <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
                     ₹{stats.monthlySalary.toLocaleString()}
                   </h5>
-                  <small className="text-muted" style={{ fontSize: "9px" }}>
-                    Total per month
-                  </small>
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#e8f5e9",
+                    backgroundColor: "#D3EAFF",
                     padding: "8px",
                     borderRadius: "10px",
                   }}
                 >
-                  <FaRupeeSign size={18} style={{ color: "#2e7d32" }} />
+                  <FaRupeeSign size={18} style={{ color: "#437EF7" }} />
                 </div>
               </div>
             </Card.Body>
@@ -597,7 +526,7 @@ const StaffManagement = () => {
       >
         <Card.Body className="py-3">
           <Row>
-            <Col md={5}>
+            <Col md={3}>
               <InputGroup>
                 <InputGroup.Text
                   style={{ backgroundColor: "#fff", borderRight: "none" }}
@@ -606,7 +535,7 @@ const StaffManagement = () => {
                 </InputGroup.Text>
                 <Form.Control
                   type="text"
-                  placeholder="Search staff by name, email, staff code or phone..."
+                  placeholder="Search by name, email, phone, staff code..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ borderLeft: "none" }}
@@ -623,16 +552,14 @@ const StaffManagement = () => {
             </Col>
             <Col md={3}>
               <Form.Select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
               >
-                <option value="all">All Departments</option>
-                <option value="Sales">Sales</option>
-                <option value="Accounts">Accounts</option>
-                <option value="Inventory">Inventory</option>
-                <option value="Admin">Admin</option>
-                <option value="HR">HR</option>
-                <option value="Operations">Operations</option>
+                <option value="all">All Roles ({stats.totalStaff})</option>
+                <option value="1">Admin ({staff.filter(s => s.role_id === 1).length})</option>
+                <option value="2">Accounts ({staff.filter(s => s.role_id === 2).length})</option>
+                <option value="3">Store Manager ({staff.filter(s => s.role_id === 3).length})</option>
+                <option value="4">Staff ({staff.filter(s => s.role_id === 4).length})</option>
               </Form.Select>
             </Col>
             <Col md={3}>
@@ -642,9 +569,7 @@ const StaffManagement = () => {
               >
                 <option value="all">All Status ({stats.totalStaff})</option>
                 <option value="active">Active ({stats.activeStaff})</option>
-                <option value="inactive">
-                  Inactive ({stats.inactiveStaff})
-                </option>
+                <option value="inactive">Inactive ({stats.inactiveStaff})</option>
               </Form.Select>
             </Col>
             <Col md={1}>
@@ -652,14 +577,13 @@ const StaffManagement = () => {
                 variant="outline-secondary"
                 onClick={clearFilters}
                 className="w-100"
-                title="Clear all filters"
+                title="Clear filters"
               >
                 <FaFilter />
               </Button>
             </Col>
           </Row>
 
-          {/* Active Filters Display */}
           {getFilterText().length > 0 && (
             <div className="mt-3 pt-2 border-top">
               <small className="text-muted me-2">Active filters:</small>
@@ -670,8 +594,7 @@ const StaffManagement = () => {
                   className="me-2 px-3 py-2"
                   style={{ cursor: "pointer" }}
                   onClick={() => {
-                    if (filter.includes("Department"))
-                      setDepartmentFilter("all");
+                    if (filter.includes("Role")) setRoleFilter("all");
                     if (filter.includes("Status")) setStatus("all");
                     if (filter.includes("Search")) setSearchTerm("");
                   }}
@@ -697,11 +620,6 @@ const StaffManagement = () => {
         <p className="text-muted mb-0">
           Showing {filteredStaff.length} of {staff.length} staff members
         </p>
-        {filteredStaff.length === 0 && (
-          <Button variant="link" onClick={clearFilters} className="p-0">
-            Clear all filters
-          </Button>
-        )}
       </div>
 
       {/* Staff Table */}
@@ -723,134 +641,236 @@ const StaffManagement = () => {
                 }}
               >
                 <tr>
-                  <th style={{ padding: "16px 12px" }}>Staff Code</th>
-                  <th style={{ padding: "16px 12px" }}>Staff Name</th>
-                  <th style={{ padding: "16px 12px" }}>Contact Info</th>
-                  <th style={{ padding: "16px 12px" }}>Designation</th>
-                  <th style={{ padding: "16px 12px" }}>Department</th>
+                  <th style={{ padding: "16px 12px" }}>Staff Member</th>
+                  <th style={{ padding: "16px 12px" }}>Contact</th>
                   <th style={{ padding: "16px 12px" }}>Role</th>
+                  <th style={{ padding: "16px 12px" }}>Designation</th>
+                  {/* <th style={{ padding: "16px 12px" }}>Salary</th> */}
                   <th style={{ padding: "16px 12px" }}>Status</th>
                   <th style={{ padding: "16px 12px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredStaff.map((member) => (
-                  <tr
-                    key={member.id}
-                    style={{ borderBottom: "1px solid #e9ecef" }}
-                  >
-                    <td style={{ padding: "16px 12px" }}>
-                      <div className="fw-semibold">
-                        {member.staff_code ||
-                          member.employee_id ||
-                          `STF-${String(member.id).padStart(3, "0")}`}
-                      </div>
-                      <small className="text-muted">ID: {member.id}</small>
-                    </td>
-                    <td style={{ padding: "16px 12px" }}>
-                      <div className="fw-semibold">{member.name}</div>
-                      <small className="text-muted">
-                        Joined: {member.joining_date || "N/A"}
-                      </small>
-                    </td>
-                    <td style={{ padding: "16px 12px" }}>
-                      <div>
-                        <small>{member.email}</small>
-                      </div>
-                      <div>
-                        <small>{member.phone || "N/A"}</small>
-                      </div>
-                    </td>
-                    <td style={{ padding: "16px 12px" }}>
-                      <div className="fw-semibold">
-                        {member.designation || "-"}
-                      </div>
-                    </td>
-                    <td style={{ padding: "16px 12px" }}>
-                      <Badge
-                        bg="secondary"
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "20px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {member.department || "-"}
-                      </Badge>
-                    </td>
-                    <td style={{ padding: "16px 12px" }}>
-                      {getRoleBadge(member.role_id, member.role)}
-                    </td>
-                    <td style={{ padding: "16px 12px" }}>
-                      <Badge
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "20px",
-                          fontWeight: "500",
-                          backgroundColor:
-                            member.status === "active"
-                              ? "hsl(227, 81%, 42%)"
-                              : member.status === "inactive"
-                                ? "#dc3545"
-                                : "#6c757d",
-                          color: "#ffffff",
-                        }}
-                      >
-                        {member.status}
-                      </Badge>
-                    </td>
-                    <td style={{ padding: "16px 12px" }}>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="me-2"
-                        onClick={() => handleViewDetails(member.id)}
-                        title="View Details"
-                        style={{ color: "#4361ee", textDecoration: "none" }}
-                      >
-                        <FaEye />
-                      </Button>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="me-2"
-                        onClick={() => handleEdit(member.id)}
-                        title="Edit"
-                        style={{ color: "#ff9800", textDecoration: "none" }}
-                      >
-                        <FaEdit />
-                      </Button>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => handleDelete(member.id, member.name)}
-                        title="Delete"
-                        style={{ color: "#dc3545", textDecoration: "none" }}
-                      >
-                        <FaTrash />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredStaff.map((member) => {
+                  const sinceDate = formatDate(member.created_at || member.joining_date);
+                  return (
+                    <tr
+                      key={member.id}
+                      style={{ borderBottom: "1px solid #e9ecef" }}
+                    >
+                      {/* Staff Name with Since Date */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <div className="fw-semibold">{member.name}</div>
+                        <small className="text-muted">Since {sinceDate}</small>
+                        {/* <div>
+                          <small className="text-muted" style={{ fontSize: "11px" }}>
+                            Code: {member.staff_code || `STF-${String(member.id).padStart(3, "0")}`}
+                          </small>
+                        </div> */}
+                      </td>
+
+                      {/* Contact with Email and Phone */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                          <FaEnvelope size={12} color="#64748b" />
+                          <small style={{ color: "#1e293b" }}>{member.email}</small>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <FaPhone size={12} color="#64748b" />
+                          <small>{member.phone || "N/A"}</small>
+                        </div>
+                      </td>
+
+                      {/* Role - MATCHING DEALERS PAGE COLORS */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: "20px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            backgroundColor: roleConfig[member.role_id]?.bg || "#f3f4f6",
+                            color: roleConfig[member.role_id]?.color || "#000000",
+                            border: "none",
+                            display: "inline-block",
+                          }}
+                        >
+                          {roleConfig[member.role_id]?.label || member.role || "Staff"}
+                        </span>
+                      </td>
+
+                      {/* Designation */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span
+                          style={{
+                            backgroundColor: "#F3F4F6",
+                            color: "#1e293b",
+                            padding: "6px 12px",
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            display: "inline-block",
+                          }}
+                        >
+                          {member.designation || "Staff"}
+                        </span>
+                      </td>
+
+                      {/* Status - MATCHING DEALERS PAGE COLORS */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: "20px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            backgroundColor: statusConfig[member.status]?.bg || "#f3f4f6",
+                            color: statusConfig[member.status]?.color || "#000000",
+                            border: "none",
+                            display: "inline-block",
+                          }}
+                        >
+                          {statusConfig[member.status]?.label || member.status}
+                        </span>
+                       </td>
+
+                      {/* Actions Dropdown */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <div className="action-dropdown">
+                          <button
+                            className="action-trigger"
+                            onClick={() =>
+                              setActiveDropdown(
+                                activeDropdown === member.id ? null : member.id,
+                              )
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "4px",
+                              borderRadius: "6px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "background-color 0.2s",
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor = "#f1f5f9")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor = "transparent")
+                            }
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                              <circle cx="12" cy="6" r="2" fill="currentColor" />
+                              <circle cx="12" cy="12" r="2" fill="currentColor" />
+                              <circle cx="12" cy="18" r="2" fill="currentColor" />
+                            </svg>
+                          </button>
+
+                          {activeDropdown === member.id && (
+                            <div className="dropdown-menu-custom">
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleViewDetails(member.id);
+                                }}
+                                className="dropdown-item-custom"
+                                title="View Details"
+                              >
+                                <FaEye style={{ color: "#4361ee", fontSize: "14px" }} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleEdit(member.id);
+                                }}
+                                className="dropdown-item-custom"
+                                title="Edit"
+                              >
+                                <FaEdit style={{ color: "#ff9800", fontSize: "14px" }} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleDelete(member.id, member.name);
+                                }}
+                                className="dropdown-item-custom delete"
+                                title="Delete"
+                              >
+                                <FaTrash style={{ color: "#dc3545", fontSize: "14px" }} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <style>{`
+                          .action-dropdown { position: relative; }
+                          .action-trigger { color: #64748b; transition: all 0.2s; }
+                          .action-trigger:hover { color: #1e293b; }
+                          .dropdown-menu-custom {
+                            position: absolute;
+                            top: 100%;
+                            right: 0;
+                            margin-top: 4px;
+                            min-width: 40px;
+                            background: white;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            z-index: 1000;
+                            overflow: hidden;
+                            animation: dropdownSlide 0.2s ease;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 2px;
+                            padding: 4px;
+                          }
+                          @keyframes dropdownSlide {
+                            from { opacity: 0; transform: translateY(-5px); }
+                            to { opacity: 1; transform: translateY(0); }
+                          }
+                          .dropdown-item-custom {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            width: 100%;
+                            padding: 6px;
+                            border: none;
+                            background: white;
+                            cursor: pointer;
+                            transition: background-color 0.2s;
+                            border-radius: 6px;
+                          }
+                          .dropdown-item-custom:hover { background-color: #f8fafc; }
+                          .dropdown-item-custom.delete:hover { background-color: #fef2f2; }
+                        `}</style>
+                       </td>
+                    </tr>
+                  );
+                })}
                 {filteredStaff.length === 0 && (
                   <tr>
-                    <td colSpan="8" className="text-center py-5">
+                    <td colSpan="6" className="text-center py-5">
                       <div className="py-4">
                         <FaSearch size={40} className="text-muted mb-3" />
                         <h5 className="text-muted">No staff members found</h5>
                         <p className="text-muted small">
                           Try adjusting your search or filter criteria
                         </p>
-                        <Button
-                          variant="primary"
-                          size="sm"
+                        <Button 
+                          style={{
+                            backgroundColor: "rgb(30, 58, 111)",
+                            border: "none"
+                          }}
+                          size="sm" 
                           onClick={clearFilters}
                         >
                           Clear all filters
                         </Button>
                       </div>
                     </td>
-                  </tr>
+                   </tr>
                 )}
               </tbody>
             </Table>

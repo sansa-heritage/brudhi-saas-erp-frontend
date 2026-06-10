@@ -20,7 +20,7 @@ import {
   FaArrowLeft,
   FaEnvelope,
   FaPhone,
-  FaMapMarker,
+  FaMapMarkerAlt,
   FaBuilding,
   FaCreditCard,
   FaFileInvoice,
@@ -36,19 +36,24 @@ import {
   FaGlobe,
   FaCity,
   FaMapPin,
+  FaLandmark,
+  FaQrcode,
   FaUserTag,
+  FaAddressCard,
   FaMobileAlt,
   FaCode,
+  FaLocationArrow,
   FaMoneyBillWave,
   FaWallet,
   FaPercent,
   FaDownload,
   FaInfoCircle,
   FaExclamationTriangle,
+  FaRegBuilding,
+  FaRegAddressCard,
   FaChartLine,
   FaStar,
 } from "react-icons/fa";
-import DocumentViewer from "../../components/Modals/DocumentViewer";
 import {
   getDealerById,
   deleteDealer,
@@ -61,6 +66,19 @@ import {
 } from "../../api/superadmin/masterData.api";
 import Swal from "sweetalert2";
 
+// Status color mapping (matching Customers page)
+const statusConfig = {
+  active: { bg: "#ECFDF3", color: "#027A48", label: "Active" },
+  inactive: { bg: "#FFDCE2", color: "#F94765", label: "Inactive" },
+};
+
+// Dealer type color mapping (matching Customers page)
+const dealerTypeConfig = {
+  distributor: { bg: "#D3EAFF", color: "#437EF7", label: "Distributor" },
+  retailer: { bg: "#FFE0CB", color: "#FF8532", label: "Retailer" },
+  franchise: { bg: "#FEF6D7", color: "#FED229", label: "Franchise" },
+};
+
 const DealerDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -68,7 +86,7 @@ const DealerDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
-  const [showDocs, setShowDocs] = useState(false);
+  const [showFullAlternateMobile, setShowFullAlternateMobile] = useState(false);
 
   // State for location names
   const [locationNames, setLocationNames] = useState({
@@ -78,6 +96,15 @@ const DealerDetails = () => {
     pincode: "",
   });
   const [loadingLocation, setLoadingLocation] = useState(false);
+
+  // Toggle functions for visibility
+  const toggleAadhaarVisibility = () => {
+    setShowFullAadhaar(!showFullAadhaar);
+  };
+
+  const toggleAlternateMobileVisibility = () => {
+    setShowFullAlternateMobile(!showFullAlternateMobile);
+  };
 
   // Validation helper functions
   const validateGST = (gstNumber) => {
@@ -96,10 +123,7 @@ const DealerDetails = () => {
     if (panRegex.test(panNumber)) {
       return { isValid: true, message: "Valid PAN Number" };
     }
-    return {
-      isValid: false,
-      message: "Invalid PAN Number Format (e.g., ABCDE1234F)",
-    };
+    return { isValid: false, message: "Invalid PAN Number Format" };
   };
 
   const validateAadhaar = (aadhaarNumber) => {
@@ -130,10 +154,19 @@ const DealerDetails = () => {
     if (mobileRegex.test(mobile)) {
       return { isValid: true, message: "Valid Mobile Number" };
     }
-    return {
-      isValid: false,
-      message: "Invalid Mobile Number (10 digits, starts with 6-9)",
-    };
+    return { isValid: false, message: "Invalid Mobile Number" };
+  };
+
+  const validateAlternateMobile = (alternateMobile, primaryMobile) => {
+    if (!alternateMobile) return { isValid: null, message: "Not provided" };
+    const mobileRegex = /^[6-9]\d{9}$/;
+    if (!mobileRegex.test(alternateMobile)) {
+      return { isValid: false, message: "Invalid Mobile Number" };
+    }
+    if (alternateMobile === primaryMobile) {
+      return { isValid: false, message: "Cannot be same as primary mobile" };
+    }
+    return { isValid: true, message: "Valid Alternate Mobile" };
   };
 
   const validateCommissionRate = (rate) => {
@@ -142,42 +175,40 @@ const DealerDetails = () => {
     if (!isNaN(num) && num >= 0 && num <= 100) {
       return { isValid: true, message: "Valid Commission Rate" };
     }
-    return { isValid: false, message: "Commission rate must be between 0% and 100%" };
+    return {
+      isValid: false,
+      message: "Commission rate must be between 0% and 100%",
+    };
   };
 
-  // Get validation badge
-  const getValidationBadge = (validation) => {
+  const getValidationIcon = (validation) => {
     if (validation.isValid === null) {
       return (
-        <Badge bg="secondary" className="ms-2 rounded-pill">
-          <FaInfoCircle className="me-1" size={10} /> Not Provided
-        </Badge>
+        <FaInfoCircle
+          className="text-secondary ms-2"
+          size={14}
+          title={validation.message}
+        />
       );
     }
     if (validation.isValid) {
       return (
-        <Badge bg="secondary" className="ms-2 rounded-pill">
-          <FaCheckCircle className="me-1" size={10} /> {validation.message}
-        </Badge>
+        <FaCheckCircle
+          className="text-success ms-2"
+          size={14}
+          title={validation.message}
+        />
       );
     }
     return (
-      <OverlayTrigger
-        placement="top"
-        overlay={<Tooltip id="tooltip-error">{validation.message}</Tooltip>}
-      >
-        <Badge
-          bg="secondary"
-          className="ms-2 rounded-pill"
-          style={{ cursor: "pointer" }}
-        >
-          <FaExclamationTriangle className="me-1" size={10} /> Invalid
-        </Badge>
-      </OverlayTrigger>
+      <FaExclamationTriangle
+        className="text-danger ms-2"
+        size={14}
+        title={validation.message}
+      />
     );
   };
 
-  // Helper function to extract data from API response
   const extractDataFromResponse = (response) => {
     if (response?.data?.data?.data && Array.isArray(response.data.data.data)) {
       return response.data.data.data;
@@ -194,29 +225,22 @@ const DealerDetails = () => {
     return [];
   };
 
-  // Fetch location names based on IDs
   const fetchLocationNames = async (dealerData) => {
     setLoadingLocation(true);
     try {
-      const names = {
-        country: "",
-        state: "",
-        city: "",
-        pincode: "",
-      };
+      const names = { country: "", state: "", city: "", pincode: "" };
 
       if (dealerData.country_id) {
         try {
           const response = await countryApi.getAll();
           const countries = extractDataFromResponse(response);
           const country = countries.find(
-            (c) => c.id === parseInt(dealerData.country_id)
+            (c) => c.id === parseInt(dealerData.country_id),
           );
           names.country = country
             ? country.name
             : `ID: ${dealerData.country_id}`;
         } catch (error) {
-          console.error("Error fetching country:", error);
           names.country = `ID: ${dealerData.country_id}`;
         }
       }
@@ -226,11 +250,10 @@ const DealerDetails = () => {
           const response = await stateApi.getAll(dealerData.country_id);
           const states = extractDataFromResponse(response);
           const state = states.find(
-            (s) => s.id === parseInt(dealerData.state_id)
+            (s) => s.id === parseInt(dealerData.state_id),
           );
           names.state = state ? state.name : `ID: ${dealerData.state_id}`;
         } catch (error) {
-          console.error("Error fetching state:", error);
           names.state = `ID: ${dealerData.state_id}`;
         }
       }
@@ -240,11 +263,10 @@ const DealerDetails = () => {
           const response = await cityApi.getAll();
           const cities = extractDataFromResponse(response);
           const city = cities.find(
-            (c) => c.id === parseInt(dealerData.city_id)
+            (c) => c.id === parseInt(dealerData.city_id),
           );
           names.city = city ? city.name : `ID: ${dealerData.city_id}`;
         } catch (error) {
-          console.error("Error fetching city:", error);
           names.city = `ID: ${dealerData.city_id}`;
         }
       }
@@ -254,13 +276,12 @@ const DealerDetails = () => {
           const response = await pincodeApi.getAll();
           const pincodes = extractDataFromResponse(response);
           const pincode = pincodes.find(
-            (p) => p.id === parseInt(dealerData.pincode_id)
+            (p) => p.id === parseInt(dealerData.pincode_id),
           );
           names.pincode = pincode
-            ? `${pincode.code}${pincode.area ? ` - ${pincode.area}` : ""}`
+            ? `${pincode.code}`
             : `ID: ${dealerData.pincode_id}`;
         } catch (error) {
-          console.error("Error fetching pincode:", error);
           names.pincode = `ID: ${dealerData.pincode_id}`;
         }
       }
@@ -279,7 +300,6 @@ const DealerDetails = () => {
       setError(null);
       try {
         const data = await getDealerById(id);
-
         let dealerData = null;
         if (data?.data?.success && data.data.data) {
           dealerData = data.data.data;
@@ -288,27 +308,19 @@ const DealerDetails = () => {
         } else if (data) {
           dealerData = data;
         }
-
         setDealer(dealerData);
-
         if (dealerData) {
           await fetchLocationNames(dealerData);
         }
       } catch (error) {
         console.error("Failed to fetch dealer:", error);
         setError(
-          error.response?.data?.message || "Failed to load dealer details"
+          error.response?.data?.message || "Failed to load dealer details",
         );
-        Swal.fire({
-          icon: "error",
-          title: "Error!",
-          text: error.response?.data?.message || "Failed to load dealer details",
-        });
       } finally {
         setLoading(false);
       }
     };
-
     if (id) {
       fetchDealer();
     }
@@ -317,11 +329,11 @@ const DealerDetails = () => {
   const handleDelete = async () => {
     const result = await Swal.fire({
       title: "Are you sure?",
-      text: `You are about to delete dealer "${dealer?.name}"`,
+      text: `Delete dealer "${dealer?.name}"?`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#666",
-      cancelButtonColor: "#999",
+      confirmButtonColor: "#6c757d",
+      cancelButtonColor: "#6c757d",
       confirmButtonText: "Yes, delete it!",
       cancelButtonText: "Cancel",
     });
@@ -338,7 +350,6 @@ const DealerDetails = () => {
         });
         navigate("/dealers");
       } catch (error) {
-        console.error("Failed to delete dealer:", error);
         Swal.fire({
           icon: "error",
           title: "Error!",
@@ -348,46 +359,41 @@ const DealerDetails = () => {
     }
   };
 
-  const handleUploadDocument = (newDoc) => {
-    setDealer((prev) => ({
-      ...prev,
-      documents: [...(prev.documents || []), newDoc],
-    }));
-  };
-
-  const handleDeleteDocument = (docId) => {
-    setDealer((prev) => ({
-      ...prev,
-      documents: (prev.documents || []).filter((doc) => doc.id !== docId),
-    }));
-  };
-
   const getStatusBadge = (status) => {
-    const isActive = status === 1 || status === "active" || status === "1";
+    const config = statusConfig[status?.toLowerCase()] || statusConfig.active;
     return (
-      <Badge
-        bg="secondary"
-        className="px-3 py-2 rounded-pill"
+      <span
+        style={{
+          backgroundColor: config.bg,
+          color: config.color,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          fontWeight: "600",
+          fontSize: "13px",
+          display: "inline-block",
+        }}
       >
-        <span className={`me-1 text-white`}>
-          {isActive ? "●" : "○"}
-        </span>
-        {isActive ? "Active" : "Inactive"}
-      </Badge>
+        {config.label}
+      </span>
     );
   };
 
   const getDealerTypeBadge = (type) => {
-    const typeMap = {
-      distributor: "secondary",
-      retailer: "secondary",
-      franchise: "secondary",
-    };
-    const color = typeMap[type?.toLowerCase()] || "secondary";
+    const config = dealerTypeConfig[type?.toLowerCase()] || dealerTypeConfig.retailer;
     return (
-      <Badge bg={color} className="px-3 py-2 rounded-pill">
-        {type?.toUpperCase() || "RETAILER"}
-      </Badge>
+      <span
+        style={{
+          backgroundColor: config.bg,
+          color: config.color,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          fontWeight: "600",
+          fontSize: "13px",
+          display: "inline-block",
+        }}
+      >
+        {config.label}
+      </span>
     );
   };
 
@@ -405,8 +411,8 @@ const DealerDetails = () => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -416,36 +422,48 @@ const DealerDetails = () => {
     if (cleanNumber.length === 12) {
       if (showFullAadhaar) {
         return cleanNumber.replace(/(\d{4})(\d{4})(\d{4})/, "$1 $2 $3");
-      } else {
-        const last4 = cleanNumber.slice(-4);
-        return `XXXX XXXX ${last4}`;
       }
+      return `XXXX XXXX ${cleanNumber.slice(-4)}`;
     }
     return aadhaarNumber;
   };
 
-  const toggleAadhaarVisibility = () => {
-    setShowFullAadhaar(!showFullAadhaar);
+  const formatAlternateMobile = (alternateMobile) => {
+    if (!alternateMobile) return "N/A";
+    const cleanNumber = alternateMobile.toString().replace(/[^\d]/g, "");
+    if (cleanNumber.length === 10) {
+      if (showFullAlternateMobile) {
+        return cleanNumber.replace(/(\d{5})(\d{5})/, "$1 $2");
+      }
+      return `XXXXXX ${cleanNumber.slice(-4)}`;
+    }
+    return alternateMobile;
   };
 
   const totalCommission =
     ((dealer?.total_sales || 0) * (dealer?.commission_rate || 0)) / 100;
-
   const availableCredit =
     (parseFloat(dealer?.credit_limit) || 0) -
     (parseFloat(dealer?.outstanding_amount) || 0);
 
-  // Get validation results
   const gstValidation = validateGST(dealer?.gst_number);
   const panValidation = validatePAN(dealer?.pan_number);
   const aadhaarValidation = validateAadhaar(dealer?.aadhaar_number);
   const emailValidation = validateEmail(dealer?.email);
   const mobileValidation = validateMobile(dealer?.mobile);
+  const alternateMobileValidation = validateAlternateMobile(
+    dealer?.alternate_mobile,
+    dealer?.mobile,
+  );
   const commissionValidation = validateCommissionRate(dealer?.commission_rate);
 
   if (loading) {
     return (
-      <Container fluid className="p-4">
+      <Container
+        fluid
+        className="p-4"
+        style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+      >
         <div className="text-center py-5">
           <Spinner animation="border" variant="secondary" size="lg" />
           <h5 className="mt-3 text-muted">Loading dealer details...</h5>
@@ -456,13 +474,14 @@ const DealerDetails = () => {
 
   if (error || !dealer) {
     return (
-      <Container fluid className="p-4">
+      <Container
+        fluid
+        className="p-4"
+        style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+      >
         <Alert variant="secondary" className="text-center">
           <h4>Dealer not found</h4>
-          <p>
-            {error ||
-              "The dealer you're looking for doesn't exist or has been removed."}
-          </p>
+          <p>{error || "The dealer you're looking for doesn't exist."}</p>
           <Button variant="secondary" onClick={() => navigate("/dealers")}>
             Back to Dealers
           </Button>
@@ -474,513 +493,457 @@ const DealerDetails = () => {
   return (
     <Container
       fluid
-      className="p-4"
-      style={{ background: "#f8f9fa", minHeight: "100vh" }}
+      className="px-4 py-3"
+      style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
     >
       {/* Header */}
-      <div className="bg-white rounded-3 p-4 mb-4 shadow-sm border">
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-          <div>
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              className="mb-3 rounded-pill"
-              onClick={() => navigate("/dealers")}
-            >
-              <FaArrowLeft className="me-2" /> Back to Dealers
-            </Button>
-            <h2 className="fw-bold mb-1 text-dark">{dealer.name}</h2>
-            <div className="d-flex align-items-center gap-3 flex-wrap">
-              <p className="mb-0 text-muted">
-                <FaHashtag className="me-1" size={12} />
-                <strong>Dealer Code:</strong>{" "}
-                {dealer.dealer_code || `DLR_${String(dealer.id).padStart(6, "0")}`}
-              </p>
-              <p className="mb-0">{getDealerTypeBadge(dealer.dealer_type)}</p>
-              <p className="mb-0">{getStatusBadge(dealer.status)}</p>
-            </div>
-          </div>
-          <div className="d-flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => navigate(`/dealers/edit/${dealer.id}`)}
-              className="rounded-pill"
-            >
-              <FaEdit className="me-2" /> Edit Dealer
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleDelete}
-              className="rounded-pill"
-            >
-              <FaTrash className="me-2" /> Delete
-            </Button>
-          </div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
+            {dealer.name}
+          </h2>
+          {/* <div className="d-flex align-items-center gap-2 flex-wrap mt-1">
+            <span className="text-muted" style={{ fontSize: "13px" }}>
+              <FaHashtag size={12} className="me-1" /> Code: {dealer.dealer_code || `DLR_${String(dealer.id).padStart(6, "0")}`}
+            </span>
+            <span>•</span>
+            {getDealerTypeBadge(dealer.dealer_type)}
+            {getStatusBadge(dealer.status)}
+          </div> */}
+        </div>
+        <div className="d-flex gap-2">
+          <Button
+            onClick={() => navigate(`/dealers/edit/${dealer.id}`)}
+            style={{
+              backgroundColor: "rgb(30, 58, 111)",
+              border: "none",
+              borderRadius: "30px",
+              padding: "8px 20px",
+              fontSize: "13px",
+              fontWeight: "600",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <FaEdit size={14} /> Edit
+          </Button>
         </div>
       </div>
 
-      {/* Stats Cards Row */}
-      <Row className="g-3 mb-4">
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Total Sales
-                  </small>
-                  <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                    {formatCurrency(dealer.total_sales || 0)}
-                  </h3>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaChartLine className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Commission Rate
-                  </small>
-                  <div className="d-flex align-items-center flex-wrap">
-                    <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                      {dealer.commission_rate || 0}%
-                    </h3>
-                    {getValidationBadge(commissionValidation)}
-                  </div>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaPercent className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Total Commission
-                  </small>
-                  <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                    {formatCurrency(totalCommission)}
-                  </h3>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaStar className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} lg={3}>
-          <Card className="border-0 shadow-sm rounded-4 h-100">
-            <Card.Body className="p-3">
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
-                  <small className="text-muted text-uppercase">
-                    Credit Limit
-                  </small>
-                  <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                    {formatCurrency(dealer.credit_limit || 0)}
-                  </h3>
-                </div>
-                <div className="bg-light rounded-circle p-3">
-                  <FaWallet className="text-secondary" size={24} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Main Content Tabs */}
-      <Card className="border-0 shadow-sm rounded-4">
-        <Card.Body className="p-0">
+      {/* Tabs Section */}
+      <Card className="border-0 shadow-sm rounded-3">
+        <Card.Header className="bg-white border-0 pt-3 px-4">
           <Tabs
             defaultActiveKey="overview"
-            className="px-3 pt-3 border-0 gap-2"
+            className="border-0 gap-2"
+            style={{ borderBottom: "2px solid #e9ecef" }}
           >
-            <Tab eventKey="overview" title="Overview" className="p-3">
-              <Row className="g-4">
-                {/* Dealer Information */}
-                <Col lg={5}>
-                  <Card className="border-0 bg-light rounded-4 h-100">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaUserCircle className="me-2 text-secondary" /> Dealer
-                        Information
-                      </h5>
-                      <hr />
-                      <div className="mb-3">
-                        <small className="text-muted d-block">
-                          Dealer Code
-                        </small>
-                        <strong>
-                          {dealer.dealer_code ||
-                            `DLR_${String(dealer.id).padStart(6, "0")}`}
-                        </strong>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">Email Address</small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{dealer.email || "N/A"}</strong>
-                          {getValidationBadge(emailValidation)}
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">Mobile Number</small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{dealer.mobile || "N/A"}</strong>
-                          {getValidationBadge(mobileValidation)}
-                        </div>
-                      </div>
-                      {dealer.alternate_mobile && (
-                        <div className="mb-3">
-                          <small className="text-muted d-block">
-                            Alternate Mobile
-                          </small>
-                          <strong>{dealer.alternate_mobile}</strong>
-                        </div>
-                      )}
-                      <div className="mb-3">
-                        <small className="text-muted d-block">GST Number</small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{dealer.gst_number || "N/A"}</strong>
-                          {getValidationBadge(gstValidation)}
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">PAN Number</small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <strong>{dealer.pan_number || "N/A"}</strong>
-                          {getValidationBadge(panValidation)}
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <small className="text-muted d-block">Aadhaar Number</small>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <span
-                            style={{ cursor: "pointer" }}
-                            onClick={toggleAadhaarVisibility}
-                            className="me-2"
-                          >
-                            <strong>{formatAadhaar(dealer.aadhaar_number)}</strong>
-                          </span>
-                          {getValidationBadge(aadhaarValidation)}
-                          {dealer.aadhaar_number && (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              onClick={toggleAadhaarVisibility}
-                              className="p-0 ms-2"
-                            >
-                              {showFullAadhaar ? "Hide" : "Show"}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
+            <Tab
+              eventKey="overview"
+              title={
+                <span className="fw-semibold">
+                  <FaUserCircle className="me-2" /> Overview
+                </span>
+              }
+              tabClassName="border-0"
+            >
+              <div className="p-3">
+                {/* Personal Information Section */}
+                <h6
+                  className="fw-bold mb-3"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaUser className="me-2" /> Personal Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Dealer Name
+                      </small>
+                      <strong>{dealer.name}</strong>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Dealer Code
+                      </small>
+                      <strong>
+                        {dealer.dealer_code ||
+                          `DLR_${String(dealer.id).padStart(6, "0")}`}
+                      </strong>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Dealer Type
+                      </small>
+                      {getDealerTypeBadge(dealer.dealer_type)}
+                    </div>
+                  </Col>
+                </Row>
 
-                {/* Address Information */}
-                <Col lg={7}>
-                  <Card className="border-0 bg-light rounded-4 mb-4">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaMapMarker className="me-2 text-secondary" /> Address
-                        Information
-                      </h5>
-                      <hr />
-                      {dealer.address && (
-                        <div className="mb-3">
-                          <small className="text-muted d-block">Address</small>
-                          <strong>{dealer.address}</strong>
-                        </div>
-                      )}
-
-                      <Row>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Country
-                            </small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.country ||
-                                dealer.country_id ||
-                                "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">State</small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.state || dealer.state_id || "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">City</small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.city || dealer.city_id || "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Pincode
-                            </small>
-                            <strong>
-                              {loadingLocation ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                locationNames.pincode ||
-                                dealer.pincode_id ||
-                                "N/A"
-                              )}
-                            </strong>
-                          </div>
-                        </Col>
-                      </Row>
-                    </Card.Body>
-                  </Card>
-
-                  {/* Commission & Credit Details */}
-                  <Card className="border-0 bg-light rounded-4">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaMoneyBillWave className="me-2 text-secondary" />
-                        Commission & Credit Details
-                      </h5>
-                      <hr />
-                      <Row>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Commission Rate
-                            </small>
-                            <div className="d-flex align-items-center flex-wrap">
-                              <h5 className="mb-0" style={{ color: "#333" }}>
-                                {dealer.commission_rate || 0}%
-                              </h5>
-                              {getValidationBadge(commissionValidation)}
-                            </div>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Credit Limit
-                            </small>
-                            <h5 className="mb-0" style={{ color: "#333" }}>
-                              {formatCurrency(dealer.credit_limit || 0)}
-                            </h5>
-                          </div>
-                        </Col>
-                      </Row>
-                      <Row>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Total Sales
-                            </small>
-                            <h5 className="mb-0" style={{ color: "#333" }}>
-                              {formatCurrency(dealer.total_sales || 0)}
-                            </h5>
-                          </div>
-                        </Col>
-                        <Col md={6}>
-                          <div className="mb-3">
-                            <small className="text-muted d-block">
-                              Total Commission Earned
-                            </small>
-                            <h5 className="mb-0" style={{ color: "#333" }}>
-                              {formatCurrency(totalCommission)}
-                            </h5>
-                          </div>
-                        </Col>
-                      </Row>
-                      <div className="bg-white rounded-3 p-3 text-center">
-                        <small className="text-muted d-block">
-                          Available Credit
-                        </small>
-                        <h3 className="fw-bold mb-0" style={{ color: "#333" }}>
-                          {formatCurrency(availableCredit)}
-                        </h3>
-                        <small className="text-muted">
-                          Credit Limit - Outstanding Amount
-                        </small>
+                {/* Contact Information Section */}
+                <h6
+                  className="fw-bold mb-3 mt-4"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaPhone className="me-2" /> Contact Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Email Address
+                      </small>
+                      <div className="d-flex align-items-center">
+                        <strong>{dealer.email || "N/A"}</strong>
+                        {getValidationIcon(emailValidation)}
                       </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
-
-              {/* Documents Section */}
-              <Row className="mt-4">
-                <Col md={12}>
-                  <Card className="border-0 bg-light rounded-4">
-                    <Card.Body>
-                      <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h5 className="fw-bold mb-0">
-                          <FaDownload className="me-2 text-secondary" /> Documents
-                        </h5>
-                        <Button
-                          size="sm"
-                          variant="outline-secondary"
-                          className="rounded-pill"
-                          onClick={() => setShowDocs(true)}
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Mobile Number
+                      </small>
+                      <div className="d-flex align-items-center">
+                        <strong>{dealer.mobile || "N/A"}</strong>
+                        {getValidationIcon(mobileValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Alternate Mobile
+                      </small>
+                      <div className="d-flex align-items-center">
+                        <span
+                          style={{ cursor: "pointer" }}
+                          onClick={toggleAlternateMobileVisibility}
+                          className="me-1"
                         >
-                          View All ({dealer.documents?.length || 0})
-                        </Button>
+                          <strong>
+                            {formatAlternateMobile(dealer.alternate_mobile)}
+                          </strong>
+                        </span>
+                        {dealer.alternate_mobile && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={toggleAlternateMobileVisibility}
+                            className="p-0 ms-1"
+                          >
+                            {showFullAlternateMobile ? "Hide" : "Show"}
+                          </Button>
+                        )}
+                        {getValidationIcon(alternateMobileValidation)}
                       </div>
-                      <hr />
-                      {dealer.documents && dealer.documents.length > 0 ? (
-                        <div className="d-flex flex-wrap gap-2">
-                          {dealer.documents.slice(0, 4).map((doc) => (
-                            <div
-                              key={doc.id}
-                              className="bg-white rounded-3 p-3 flex-grow-1"
-                            >
-                              <strong>{doc.name}</strong>
-                              <div className="small text-muted">
-                                {doc.upload_date || doc.uploadDate}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-muted text-center py-3">
-                          No documents uploaded
-                        </p>
-                      )}
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
+                    </div>
+                  </Col>
+                </Row>
 
-              {/* System Info */}
-              <Row className="mt-4">
-                <Col md={12}>
-                  <Card className="border-0 bg-light rounded-4">
-                    <Card.Body>
-                      <h5 className="fw-bold mb-3">
-                        <FaCalendarAlt className="me-2 text-secondary" /> System
-                        Information
-                      </h5>
-                      <hr />
-                      <Row>
-                        <Col md={4}>
-                          <small className="text-muted d-block">
-                            Created By
-                          </small>
-                          <strong>{dealer.created_by || "System"}</strong>
-                        </Col>
-                        <Col md={4}>
-                          <small className="text-muted d-block">
-                            Created At
-                          </small>
-                          <strong>{formatDate(dealer.created_at)}</strong>
-                        </Col>
-                        <Col md={4}>
-                          <small className="text-muted d-block">
-                            Last Updated
-                          </small>
-                          <strong>{formatDate(dealer.updated_at)}</strong>
-                        </Col>
-                      </Row>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
+                {/* Tax Information Section */}
+                <h6
+                  className="fw-bold mb-3 mt-4"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaIdCard className="me-2" /> Tax Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        GST Number
+                      </small>
+                      <div className="d-flex align-items-center">
+                        <strong>{dealer.gst_number || "N/A"}</strong>
+                        {getValidationIcon(gstValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        PAN Number
+                      </small>
+                      <div className="d-flex align-items-center">
+                        <strong>{dealer.pan_number || "N/A"}</strong>
+                        {getValidationIcon(panValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={4}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Aadhaar Number
+                      </small>
+                      <div className="d-flex align-items-center">
+                        <span
+                          style={{ cursor: "pointer" }}
+                          onClick={toggleAadhaarVisibility}
+                          className="me-1"
+                        >
+                          <strong>
+                            {formatAadhaar(dealer.aadhaar_number)}
+                          </strong>
+                        </span>
+                        {dealer.aadhaar_number && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={toggleAadhaarVisibility}
+                            className="p-0 ms-1"
+                          >
+                            {showFullAadhaar ? "Hide" : "Show"}
+                          </Button>
+                        )}
+                        {getValidationIcon(aadhaarValidation)}
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                {/* Address Information Section */}
+                <h6
+                  className="fw-bold mb-3 mt-4"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaMapMarkerAlt className="me-2" /> Address Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3">
+                  <Col md={6}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Full Address
+                      </small>
+                      <strong>{dealer.address || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={6}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Landmark
+                      </small>
+                      <strong>{dealer.landmark || "N/A"}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Country
+                      </small>
+                      <strong>
+                        {loadingLocation ? (
+                          <Spinner animation="border" size="sm" />
+                        ) : (
+                          locationNames.country || "N/A"
+                        )}
+                      </strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        State
+                      </small>
+                      <strong>
+                        {loadingLocation ? (
+                          <Spinner animation="border" size="sm" />
+                        ) : (
+                          locationNames.state || "N/A"
+                        )}
+                      </strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        City
+                      </small>
+                      <strong>
+                        {loadingLocation ? (
+                          <Spinner animation="border" size="sm" />
+                        ) : (
+                          locationNames.city || "N/A"
+                        )}
+                      </strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Pincode
+                      </small>
+                      <strong>
+                        {loadingLocation ? (
+                          <Spinner animation="border" size="sm" />
+                        ) : (
+                          locationNames.pincode || "N/A"
+                        )}
+                      </strong>
+                    </div>
+                  </Col>
+                </Row>
+
+                {/* Financial Information Section */}
+                <h6
+                  className="fw-bold mb-3 mt-4"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaMoneyBillWave className="me-2" /> Financial Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3">
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Commission Rate
+                      </small>
+                      <strong>{dealer.commission_rate || 0}%</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Credit Limit
+                      </small>
+                      <strong>
+                        {formatCurrency(dealer.credit_limit || 0)}
+                      </strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Total Sales
+                      </small>
+                      <strong>{formatCurrency(dealer.total_sales || 0)}</strong>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div>
+                      <small
+                        className="text-muted d-block"
+                        style={{ fontSize: "11px" }}
+                      >
+                        Status
+                      </small>
+                      {getStatusBadge(dealer.status)}
+                    </div>
+                  </Col>
+                </Row>
+              </div>
             </Tab>
 
-            <Tab eventKey="sales" title="Sales History" className="p-3">
-              <div className="text-center py-5">
+            <Tab
+              eventKey="sales"
+              title={
+                <span className="fw-semibold">
+                  <FaChartLine className="me-2" /> Sales History
+                </span>
+              }
+            >
+              <div className="p-5 text-center">
                 <FaChartLine size={60} className="text-muted mb-3" />
                 <h5 className="text-muted">No sales records found</h5>
                 <p className="text-muted small">
-                  Add sales to see them here
+                  Sales records will appear here once added
                 </p>
               </div>
             </Tab>
-
-            <Tab eventKey="documents" title="Documents" className="p-3">
-              <Card className="border-0 bg-light rounded-4">
-                <Card.Body>
-                  <h5 className="fw-bold mb-3">Dealer Documents</h5>
-                  <hr />
-                  {dealer.documents && dealer.documents.length > 0 ? (
-                    <div className="table-responsive">
-                      <table className="table table-hover">
-                        <thead>
-                          <tr>
-                            <th>Document Name</th>
-                            <th>Type</th>
-                            <th>Upload Date</th>
-                            <th>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dealer.documents.map((doc) => (
-                            <tr key={doc.id}>
-                              <td>{doc.name}</td>
-                              <td>{doc.type}</td>
-                              <td>{doc.upload_date || doc.uploadDate}</td>
-                              <td>
-                                <Button size="sm" variant="outline-secondary" className="me-1">
-                                  <FaDownload />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-muted text-center py-3">
-                      No documents uploaded
-                    </p>
-                  )}
-                </Card.Body>
-              </Card>
-            </Tab>
           </Tabs>
-        </Card.Body>
+        </Card.Header>
       </Card>
 
-      {/* Document Viewer Modal */}
-      <DocumentViewer
-        show={showDocs}
-        onHide={() => setShowDocs(false)}
-        documents={dealer.documents || []}
-        onUpload={handleUploadDocument}
-        onDelete={handleDeleteDocument}
-      />
+      <style>{`
+        .nav-tabs {
+          border-bottom: none !important;
+        }
+        .nav-tabs .nav-link {
+          border: none;
+          color: #6c757d;
+          padding: 10px 16px;
+          font-size: 14px;
+          transition: all 0.2s;
+          border-radius: 30px;
+          margin-right: 8px;
+        }
+        .nav-tabs .nav-link:hover {
+          color: rgb(30, 58, 111);
+          background: #f1f5f9;
+        }
+        .nav-tabs .nav-link.active {
+          color: rgb(30, 58, 111);
+          background: #eef2ff;
+          border: none;
+        }
+        .rounded-3 {
+          border-radius: 12px !important;
+        }
+      `}</style>
     </Container>
   );
 };

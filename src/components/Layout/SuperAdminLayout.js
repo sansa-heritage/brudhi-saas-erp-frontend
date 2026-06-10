@@ -1,5 +1,6 @@
 import React from "react";
 import Sidebar from "./Sidebar";
+import Breadcrumb from "./Breadcrumb";
 
 const SuperAdminLayout = ({ children }) => {
   return (
@@ -14,6 +15,10 @@ const SuperAdminLayout = ({ children }) => {
         {/* Topbar */}
         <div className="bg-light p-3 shadow">
           <h5>Super Admin Panel</h5>
+        </div>
+         {/* Breadcrumb */}
+        <div className="breadcrumb-wrapper">
+          <Breadcrumb />
         </div>
 
         {/* Page Content */}

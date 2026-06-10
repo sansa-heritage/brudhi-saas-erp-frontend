@@ -53,14 +53,6 @@ import AddStaff from "./pages/staff/AddStaff";
 import EditStaff from "./pages/staff/EditStaff"; // Add this - Make sure file exists
 import ViewStaff from "./pages/staff/ViewStaff"; // Add this - Make sure file exists
 import RolePermissions from "./pages/staff/RolePermissions";
-
-// Document Management Imports
-import DocumentManagement from "./pages/documents/DocumentManagement";
-import CustomerDocuments from "./pages/documents/CustomerDocuments";
-import DealerDocuments from "./pages/documents/DealerDocuments";
-import CompanyDocuments from "./pages/documents/CompanyDocuments";
-import CustomerDocumentView from "./pages/documents/CustomerDocumentView";
-import DealerDocumentView from "./pages/documents/DealerDocumentView";
 import Subscription from "./pages/subscription/subscription";
 import UpgradeSubscription from "./pages/subscription/UpgradeSubscription";
 import SubscriptionDetails from "./pages/subscription/SubscriptionDetails";
@@ -84,12 +76,29 @@ import Orders from "./pages/orders/Orders.js";
 import AddOrder from "./pages/orders/AddOrder.js";
 import EditOrder from "./pages/orders/EditOrder.js";
 import Invoices from "./pages/invoices/Invoices.js";
-// import CreateInvoice from "./pages/invoices/CreateInvoice.js";
 import TenantSubscription from "./pages/superadmin/ManageTenant/TenantSubscription.js";
 import ProfileManagement from "./pages/ProfileManagement.js";
 import ChangePassword from "./components/Profile/ChangePassword.js";
 import AddInvoice from "./pages/invoices/AddInvoice.js";
 import EditInvoice from "./pages/invoices/EditInvoice.js";
+import Breadcrumb from "./components/Layout/Breadcrumb.js";
+import CompanySetting from "./pages/companysetting/CompanySettings.js";
+import ViewExpense from "./pages/expenses/ViewExpense.js";
+import ViewInventory from "./pages/inventory/ViewInventory.js";
+import PayrollList from "./pages/payroll/PayrollList.js";
+import GeneratePayroll from "./pages/payroll/GeneratePayroll.js";
+import PayrollDetails from "./pages/payroll/PayrollDetails.js";
+import SalaryStructureList from "./pages/salaryStructure/StructureList.js";
+import AddSalaryStructure from "./pages/salaryStructure/AddSalaryStructure.js";
+import ViewSalaryStructure from "./pages/salaryStructure/ViewSalaryStructure.js";
+import MarkLeave from "./pages/leave/MarkLeave.js";
+import LeaveHistory from "./pages/leave/LeaveHistory.js";
+import BonusList from "./pages/bonus/BonusList.js";
+import AddBonus from "./pages/bonus/AddBonus.js";
+import TargetList from "./pages/target/TargetList.js";
+import AddTarget from "./pages/target/AddTarget.js";
+import OvertimeList from "./pages/overtime/OvertimeList.js";
+import AddOvertime from "./pages/overtime/AddOvertime.js";
 
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = localStorage.getItem("isAuthenticated");
@@ -104,7 +113,13 @@ const Layout = ({ children }) => {
       <Sidebar />
       <div className="main-content">
         <TopBar toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
-        {children}
+        {/* {children} */}
+        <div className="content-wrapper">
+          <div className="container-fluid px-4 py-3">
+            <Breadcrumb /> {/* Add this line */}
+            {children}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -279,6 +294,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/products"
           element={
@@ -392,6 +408,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/expenses/view/:id"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ViewExpense />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
         {/* Inventory Routes */}
         <Route
           path="/inventory"
@@ -424,16 +450,16 @@ function App() {
           }
         />
 
-        {/* <Route
-          path="/invoices"
+        <Route
+          path="/inventory/view/:id"
           element={
             <ProtectedRoute>
               <Layout>
-                <Invoices />
+                <ViewInventory />
               </Layout>
             </ProtectedRoute>
           }
-        /> */}
+        />
 
         <Route
           path="/invoices"
@@ -457,7 +483,7 @@ function App() {
         />
         {/* Edit Invoice Page */}
         <Route
-          path="/invoices/edit/:id"
+          path="/invoices/:id"
           element={
             <ProtectedRoute>
               <Layout>
@@ -467,16 +493,171 @@ function App() {
           }
         />
 
-        {/* <Route
-          path="/invoices/create"
+        {/* ============ PAYROLL ROUTES ============ */}
+
+        {/* Payroll Main */}
+        <Route
+          path="/staff/payroll/generate"
           element={
             <ProtectedRoute>
               <Layout>
-                <CreateInvoice />
+                <GeneratePayroll />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/payroll"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <PayrollList />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/payroll/:id"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <PayrollDetails />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff/salary-structure"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <SalaryStructureList />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/salary-structure/add"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <AddSalaryStructure />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff/salary-structure/:id"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ViewSalaryStructure />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Leave Management Routes */}
+        <Route
+          path="/staff/mark-leave"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <MarkLeave />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/leave-history"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <LeaveHistory />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Bonus Routes */}
+        <Route
+          path="/staff/bonuses"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <BonusList />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff/bonuses/add"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <AddBonus />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* <Route
+          path="/staff/bonuses/:id"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ViewSalaryStructure />
               </Layout>
             </ProtectedRoute>
           }
         /> */}
+
+        <Route
+          path="/staff/targets"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <TargetList />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff/targets/add"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <AddTarget />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff/overtime"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <OvertimeList />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/overtime/add"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <AddOvertime />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/reports"
@@ -543,8 +724,19 @@ function App() {
           }
         />
 
-        {/* Document Management Routes */}
         <Route
+          path="/company-setting"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <CompanySetting />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Document Management Routes */}
+        {/* <Route
           path="/documents"
           element={
             <ProtectedRoute>
@@ -603,7 +795,7 @@ function App() {
               </Layout>
             </ProtectedRoute>
           }
-        />
+        /> */}
         {/* Subscription Routes */}
         <Route
           path="/subscription"

@@ -10,6 +10,10 @@ import {
   Spinner,
   Table,
   Badge,
+  OverlayTrigger,
+  Tooltip,
+  Tab,
+  Nav,
 } from "react-bootstrap";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -28,47 +32,18 @@ import {
   FaBuilding,
   FaPercent,
   FaEdit,
+  FaInfoCircle,
+  FaCheckCircle,
+  FaExclamationTriangle,
+  FaCreditCard,
+  FaTag,
 } from "react-icons/fa";
 import { getOrderById, updateOrder } from "../../api/tenant/order.api";
 import { getCustomers } from "../../api/tenant/customer.api";
 import { getDealers } from "../../api/tenant/dealer.api";
 import { getProducts } from "../../api/tenant/inventory.api";
-
-// Toast helper functions
-const showToast = (icon, title, timer = 3000) => {
-  const Toast = Swal.mixin({
-    toast: true,
-    position: "top-end",
-    showConfirmButton: false,
-    timer: timer,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-      toast.addEventListener("mouseenter", Swal.stopTimer);
-      toast.addEventListener("mouseleave", Swal.resumeTimer);
-    },
-  });
-  
-  Toast.fire({
-    icon: icon,
-    title: title,
-  });
-};
-
-const showErrorToast = (title, timer = 4000) => {
-  showToast("error", title, timer);
-};
-
-const showSuccessToast = (title, timer = 2000) => {
-  showToast("success", title, timer);
-};
-
-const showWarningToast = (title, timer = 3000) => {
-  showToast("warning", title, timer);
-};
-
-const showInfoToast = (title, timer = 3000) => {
-  showToast("info", title, timer);
-};
+import { ToastContainer, toast, Bounce } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const EditOrder = () => {
   const { id } = useParams();
@@ -76,6 +51,7 @@ const EditOrder = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  const [activeTab, setActiveTab] = useState("order");
 
   // Data lists
   const [customers, setCustomers] = useState([]);
@@ -112,6 +88,25 @@ const EditOrder = () => {
     changed_by: currentUserId,
   });
 
+  const getValidationIcon = (fieldValue, validationError) => {
+    if (!fieldValue) {
+      return <FaInfoCircle className="text-secondary ms-2" size={14} />;
+    }
+    if (!validationError) {
+      return <FaCheckCircle className="text-success ms-2" size={14} />;
+    }
+    return (
+      <OverlayTrigger
+        placement="top"
+        overlay={<Tooltip id={`tooltip-${fieldValue}`}>{validationError}</Tooltip>}
+      >
+        <span className="text-danger ms-2" style={{ cursor: "pointer" }}>
+          <FaExclamationTriangle size={14} />
+        </span>
+      </OverlayTrigger>
+    );
+  };
+
   useEffect(() => {
     loadData();
   }, [id]);
@@ -123,27 +118,22 @@ const EditOrder = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load all required data in parallel
       const [orderRes, customersRes, dealersRes, productsRes] = await Promise.all([
         getOrderById(id),
         getCustomers().catch(err => {
           console.error("Customers API error:", err);
-          showErrorToast("Failed to load customers");
           return [];
         }),
         getDealers().catch(err => {
           console.error("Dealers API error:", err);
-          showErrorToast("Failed to load dealers");
           return [];
         }),
         getProducts().catch(err => {
           console.error("Products API error:", err);
-          showErrorToast("Failed to load products");
           return [];
         }),
       ]);
 
-      // Extract order data - FIXED: Handle the actual response structure
       let orderData = null;
       if (orderRes?.data?.data) {
         orderData = orderRes.data.data;
@@ -156,7 +146,7 @@ const EditOrder = () => {
       console.log("Order data received:", orderData);
 
       if (!orderData) {
-        showErrorToast("Order not found");
+        toast.error("Order not found", { position: "top-right", theme: "colored", transition: Bounce });
         navigate("/orders");
         return;
       }
@@ -172,7 +162,6 @@ const EditOrder = () => {
       } else if (Array.isArray(customersRes)) {
         customersList = customersRes;
       }
-      console.log("Customers loaded:", customersList.length);
       setCustomers(customersList);
 
       // Extract dealers list
@@ -186,7 +175,6 @@ const EditOrder = () => {
       } else if (Array.isArray(dealersRes)) {
         dealersList = dealersRes;
       }
-      console.log("Dealers loaded:", dealersList.length);
       setDealers(dealersList);
 
       // Extract products list
@@ -208,14 +196,13 @@ const EditOrder = () => {
         gst_rate: parseFloat(product.gst_rate || 18),
         current_stock: parseInt(product.current_stock || 0),
       }));
-      console.log("Products loaded:", mappedProducts.length);
       setProducts(mappedProducts);
 
       // Set party type from order data
       const customerType = orderData.customer_type || "customer";
       setPartyType(customerType);
 
-      // Set form data - FIXED: Properly map all fields
+      // Set form data
       setFormData({
         order_date: orderData.order_date ? orderData.order_date.split("T")[0] : "",
         customer_id: orderData.customer_id?.toString() || "",
@@ -238,7 +225,7 @@ const EditOrder = () => {
         changed_by: currentUserId,
       });
 
-      // Set items from order data - FIXED: Map items correctly
+      // Set items from order data
       if (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0) {
         const mappedItems = orderData.items.map((item, idx) => ({
           id: idx + 1,
@@ -251,7 +238,6 @@ const EditOrder = () => {
           total_amount: parseFloat(item.total_amount) || 0,
           is_existing: true,
         }));
-        console.log("Mapped items:", mappedItems);
         setItems(mappedItems);
         setNextItemId(mappedItems.length + 1);
       } else {
@@ -269,11 +255,10 @@ const EditOrder = () => {
         setNextItemId(2);
       }
 
-      showSuccessToast("Order loaded successfully", 1500);
-
+      // toast.success("Order loaded successfully", { position: "top-right", autoClose: 1500, theme: "colored", transition: Bounce });
     } catch (err) {
       console.error("Failed to load data:", err);
-      showErrorToast("Failed to load order details");
+      toast.error("Failed to load order details", { position: "top-right", theme: "colored", transition: Bounce });
       navigate("/orders");
     } finally {
       setLoading(false);
@@ -349,7 +334,6 @@ const EditOrder = () => {
   const handlePartyTypeChange = (type) => {
     setPartyType(type);
     setFormData(prev => ({ ...prev, customer_type: type, customer_id: "" }));
-    showInfoToast(`Switched to ${type === "customer" ? "Customer" : "Dealer"} mode`);
   };
 
   const handleProductSelect = (index, productId) => {
@@ -376,7 +360,6 @@ const EditOrder = () => {
         total_amount: totalAmount,
       };
       setItems(updatedItems);
-      showSuccessToast(`Added ${selectedProduct.name}`, 1000);
     }
   };
 
@@ -418,7 +401,6 @@ const EditOrder = () => {
       },
     ]);
     setNextItemId(nextItemId + 1);
-    showInfoToast("New item added");
   };
 
   const removeItem = (index) => {
@@ -428,7 +410,6 @@ const EditOrder = () => {
     }
     const updatedItems = items.filter((_, i) => i !== index);
     setItems(updatedItems);
-    showWarningToast("Item removed", 1500);
   };
 
   const validateForm = () => {
@@ -463,21 +444,24 @@ const EditOrder = () => {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    if (Object.keys(newErrors).length > 0) {
+      toast.error("Please fix the validation errors", { position: "top-right", theme: "colored", transition: Bounce });
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
-      showErrorToast("Please fill all required fields");
       return;
     }
 
     setSubmitting(true);
 
     try {
-      // Prepare items array
       const itemsArray = [];
       
       for (const item of items) {
@@ -510,12 +494,11 @@ const EditOrder = () => {
       }
       
       if (itemsArray.length === 0) {
-        showErrorToast("Please add at least one valid item");
+        toast.error("Please add at least one valid item", { position: "top-right", theme: "colored", transition: Bounce });
         setSubmitting(false);
         return;
       }
 
-      // Prepare submit data
       const submitData = {
         order_date: formData.order_date,
         customer_id: parseInt(formData.customer_id),
@@ -541,21 +524,17 @@ const EditOrder = () => {
 
       console.log("Submitting order update:", submitData);
       
-      const response = await updateOrder(id, submitData);
-      console.log("Order update response:", response);
+      await updateOrder(id, submitData);
       
-      showSuccessToast("Order updated successfully!");
+      toast.success("✅ Order updated successfully!", { position: "top-right", autoClose: 3000, theme: "colored", transition: Bounce });
       
-      // Small delay to show toast before navigation
       setTimeout(() => {
         navigate("/orders");
       }, 1500);
     } catch (error) {
       console.error("Failed to update order:", error);
-      console.error("Error details:", error.response?.data);
-      
       const errorMessage = error.response?.data?.message || "Failed to update order";
-      showErrorToast(errorMessage);
+      toast.error(`❌ ${errorMessage}`, { position: "top-right", autoClose: 4000, theme: "colored", transition: Bounce });
     } finally {
       setSubmitting(false);
     }
@@ -570,68 +549,100 @@ const EditOrder = () => {
 
   if (loading) {
     return (
-      <Container fluid className="p-4 bg-light">
+      <Container fluid className="p-4" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
         <div className="text-center py-5">
           <Spinner animation="border" variant="secondary" size="lg" />
-          <h5 className="mt-3">Loading order details...</h5>
+          <h5 className="mt-3 text-muted">Loading order details...</h5>
         </div>
       </Container>
     );
   }
 
   return (
-    <Container fluid className="p-4 bg-light">
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <Button
-            variant="link"
-            className="text-decoration-none p-0 d-flex align-items-center text-secondary mb-2"
-            onClick={() => navigate("/orders")}
-          >
-            <FaArrowLeft className="me-2" /> Back to Orders
-          </Button>
-          <h2 className="fw-bold mb-1">
-            <FaEdit className="me-2 text-secondary" /> Edit Order #{id}
-          </h2>
-          <p className="text-muted">Update order information</p>
-        </div>
-      </div>
+    <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      <ToastContainer position="top-right" autoClose={3000} theme="colored" transition={Bounce} />
 
       <Form onSubmit={handleSubmit}>
-        <Row className="g-4">
-          {/* Order Details */}
-          <Col lg={6}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaCalendarAlt className="me-2 text-secondary" /> Order Details
-                </h6>
+        <Card className="border-0 shadow-sm rounded-3">
+          <Card.Header className="bg-white border-0 pt-3 px-4">
+            <div className="d-flex gap-2 border-bottom pb-2">
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setActiveTab("order")}
+                className={`fw-semibold text-decoration-none px-3 py-2 rounded-3 ${activeTab === "order" ? "bg-light" : ""}`}
+                style={{
+                  color: activeTab === "order" ? "rgb(30, 58, 111)" : "#6c757d",
+                }}
+              >
+                <FaShoppingCart className="me-2" /> Order Details
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setActiveTab("party")}
+                className={`fw-semibold text-decoration-none px-3 py-2 rounded-3 ${activeTab === "party" ? "bg-light" : ""}`}
+                style={{
+                  color: activeTab === "party" ? "rgb(30, 58, 111)" : "#6c757d",
+                }}
+              >
+                <FaUser className="me-2" /> Party Information
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setActiveTab("financial")}
+                className={`fw-semibold text-decoration-none px-3 py-2 rounded-3 ${activeTab === "financial" ? "bg-light" : ""}`}
+                style={{
+                  color: activeTab === "financial" ? "rgb(30, 58, 111)" : "#6c757d",
+                }}
+              >
+                <FaMoneyBill className="me-2" /> Financial Details
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setActiveTab("items")}
+                className={`fw-semibold text-decoration-none px-3 py-2 rounded-3 ${activeTab === "items" ? "bg-light" : ""}`}
+                style={{
+                  color: activeTab === "items" ? "rgb(30, 58, 111)" : "#6c757d",
+                }}
+              >
+                <FaBox className="me-2" /> Order Items
+              </Button>
+            </div>
+          </Card.Header>
 
-                <Row>
+          <Card.Body className="p-4">
+            {/* Order Details Tab */}
+            {activeTab === "order" && (
+              <div>
+                <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                  <FaCalendarAlt className="me-2" /> Basic Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Order Date *</Form.Label>
-                      <Form.Control
-                        type="date"
-                        name="order_date"
-                        value={formData.order_date}
-                        onChange={handleChange}
-                        isInvalid={!!errors.order_date}
-                      />
-                      <Form.Control.Feedback type="invalid">
-                        {errors.order_date}
-                      </Form.Control.Feedback>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold">Order Date <span className="text-danger">*</span></Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Control
+                          type="date"
+                          name="order_date"
+                          value={formData.order_date}
+                          onChange={handleChange}
+                          isInvalid={!!errors.order_date}
+                          className="flex-grow-1 rounded-2"
+                        />
+                        {getValidationIcon(formData.order_date, errors.order_date)}
+                      </div>
+                      {errors.order_date && <Form.Text className="text-danger">{errors.order_date}</Form.Text>}
                     </Form.Group>
                   </Col>
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Order Type</Form.Label>
-                      <Form.Select
-                        name="order_type"
-                        value={formData.order_type}
-                        onChange={handleChange}
-                      >
+                    <Form.Group>
+                      <Form.Label className="fw-semibold">Order Type</Form.Label>
+                      <Form.Select name="order_type" value={formData.order_type} onChange={handleChange} className="rounded-2">
                         <option value="sales">Sales Order</option>
                         <option value="purchase">Purchase Order</option>
                         <option value="return">Return Order</option>
@@ -640,115 +651,133 @@ const EditOrder = () => {
                   </Col>
                 </Row>
 
-                <Row>
+                <Row className="g-3 mb-4">
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Order Status</Form.Label>
-                      <Form.Select
-                        name="status"
-                        value={formData.status}
-                        onChange={handleChange}
-                      >
+                    <Form.Group>
+                      <Form.Label className="fw-semibold">Order Status</Form.Label>
+                      <Form.Select name="status" value={formData.status} onChange={handleChange} className="rounded-2">
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
                         <option value="processing">Processing</option>
-                        <option value="shipped">Shipped</option>
+                        <option value="filled">Filled</option>
+                        <option value="quality_check">Quality Check</option>
+                        <option value="ready_for_dispatch">Ready for Dispatch</option>
+                        <option value="dispatched">Dispatched</option>
+                        <option value="out_for_delivery">Out for Delivery</option>
                         <option value="delivered">Delivered</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
+                        <option value="returned">Returned</option>
                       </Form.Select>
                     </Form.Group>
                   </Col>
                 </Row>
-              </Card.Body>
-            </Card>
 
-            {/* Party Information */}
-            <Card className="border-0 shadow-sm rounded-3 mt-4">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaUser className="me-2 text-secondary" /> Party Information
-                </h6>
+                <Alert variant="success" className="mt-4 rounded-3">
+                  <FaCheckCircle className="me-2" />
+                  <small>
+                    <strong>Ready to Update?</strong>
+                    <br />
+                    Please review all order details before updating.
+                    <br />
+                    You can edit the order again later if needed.
+                  </small>
+                </Alert>
+              </div>
+            )}
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Select Party Type *</Form.Label>
-                  <div className="d-flex gap-3">
-                    <Button
-                      type="button"
-                      variant={partyType === "customer" ? "secondary" : "outline-secondary"}
-                      onClick={() => handlePartyTypeChange("customer")}
-                      size="sm"
-                    >
-                      Customer
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={partyType === "dealer" ? "secondary" : "outline-secondary"}
-                      onClick={() => handlePartyTypeChange("dealer")}
-                      size="sm"
-                    >
-                      Dealer
-                    </Button>
-                  </div>
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    Select {partyType === "customer" ? "Customer" : "Dealer"} *
-                  </Form.Label>
-                  <Form.Select
-                    name="customer_id"
-                    value={formData.customer_id}
-                    onChange={handleChange}
-                    isInvalid={!!errors.customer_id}
-                  >
-                    <option value="">Select {partyType === "customer" ? "Customer" : "Dealer"}</option>
-                    {(partyType === "customer" ? customers : dealers).map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name || item.company_name || item.first_name || item.customer_name}
-                      </option>
-                    ))}
-                  </Form.Select>
-                  <Form.Control.Feedback type="invalid">
-                    {errors.customer_id}
-                  </Form.Control.Feedback>
-                </Form.Group>
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* Financial Details */}
-          <Col lg={6}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaMoneyBill className="me-2 text-secondary" /> Financial Details
-                </h6>
-
+            {/* Party Information Tab */}
+            {activeTab === "party" && (
+              <div>
                 <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Payment Status</Form.Label>
-                      <Form.Select
-                        name="payment_status"
-                        value={formData.payment_status}
-                        onChange={handleChange}
-                      >
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaUser className="me-2" /> Select Party Type
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Party Type *</Form.Label>
+                      <div className="d-flex gap-3">
+                        <Button
+                          type="button"
+                          variant={partyType === "customer" ? "secondary" : "outline-secondary"}
+                          onClick={() => handlePartyTypeChange("customer")}
+                          size="sm"
+                          className="rounded-pill"
+                        >
+                          Customer
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={partyType === "dealer" ? "secondary" : "outline-secondary"}
+                          onClick={() => handlePartyTypeChange("dealer")}
+                          size="sm"
+                          className="rounded-pill"
+                        >
+                          Dealer
+                        </Button>
+                      </div>
+                    </Form.Group>
+                  </Col>
+
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaBuilding className="me-2" /> Select Party
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">
+                        Select {partyType === "customer" ? "Customer" : "Dealer"} <span className="text-danger">*</span>
+                      </Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Select
+                          name="customer_id"
+                          value={formData.customer_id}
+                          onChange={handleChange}
+                          isInvalid={!!errors.customer_id}
+                          className="flex-grow-1 rounded-2"
+                        >
+                          <option value="">Select {partyType === "customer" ? "Customer" : "Dealer"}</option>
+                          {(partyType === "customer" ? customers : dealers).map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name || item.company_name || item.first_name || item.customer_name}
+                            </option>
+                          ))}
+                        </Form.Select>
+                        {getValidationIcon(formData.customer_id, errors.customer_id)}
+                      </div>
+                      {errors.customer_id && <Form.Text className="text-danger">{errors.customer_id}</Form.Text>}
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+            )}
+
+            {/* Financial Details Tab */}
+            {activeTab === "financial" && (
+              <div>
+                <Row>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaCreditCard className="me-2" /> Payment Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Payment Status</Form.Label>
+                      <Form.Select name="payment_status" value={formData.payment_status} onChange={handleChange} className="rounded-2">
                         <option value="pending">Pending</option>
                         <option value="paid">Paid</option>
                         <option value="partial">Partial</option>
                         <option value="refunded">Refunded</option>
                       </Form.Select>
                     </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Payment Method</Form.Label>
-                      <Form.Select
-                        name="payment_method"
-                        value={formData.payment_method}
-                        onChange={handleChange}
-                      >
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Payment Method</Form.Label>
+                      <Form.Select name="payment_method" value={formData.payment_method} onChange={handleChange} className="rounded-2">
                         <option value="">Select Method</option>
                         <option value="cash">Cash</option>
                         <option value="card">Card</option>
@@ -757,292 +786,277 @@ const EditOrder = () => {
                       </Form.Select>
                     </Form.Group>
                   </Col>
-                </Row>
 
-                <Row>
-                  <Col md={4}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Subtotal</Form.Label>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaTruck className="me-2" /> Shipping Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Delivery Address</Form.Label>
                       <Form.Control
-                        type="text"
-                        value={`₹${parseFloat(formData.subtotal).toFixed(2)}`}
-                        readOnly
-                        disabled
-                        className="bg-light"
+                        as="textarea"
+                        rows={3}
+                        name="delivery_address"
+                        value={formData.delivery_address}
+                        onChange={handleChange}
+                        placeholder="Enter delivery address"
+                        className="rounded-2"
                       />
                     </Form.Group>
-                  </Col>
-                  <Col md={4}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Discount Type</Form.Label>
-                      <Form.Select
-                        name="discount_type"
-                        value={formData.discount_type}
-                        onChange={handleChange}
-                      >
-                        <option value="percentage">Percentage (%)</option>
-                        <option value="fixed">Fixed Amount</option>
-                      </Form.Select>
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Delivery Date</Form.Label>
+                      <Form.Control type="date" name="delivery_date" value={formData.delivery_date} onChange={handleChange} className="rounded-2" />
                     </Form.Group>
-                  </Col>
-                  <Col md={4}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Discount Value</Form.Label>
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Notes</Form.Label>
                       <Form.Control
-                        type="number"
-                        name="discount_value"
-                        value={formData.discount_value}
+                        as="textarea"
+                        rows={2}
+                        name="notes"
+                        value={formData.notes}
                         onChange={handleChange}
-                        min="0"
-                        step="0.01"
+                        placeholder="Additional notes..."
+                        className="rounded-2"
                       />
                     </Form.Group>
                   </Col>
                 </Row>
 
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Tax Amount</Form.Label>
-                      <Form.Control
-                        type="number"
-                        name="tax_amount"
-                        value={formData.tax_amount}
-                        onChange={handleChange}
-                        min="0"
-                        step="0.01"
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Shipping Charge</Form.Label>
-                      <Form.Control
-                        type="number"
-                        name="shipping_charge"
-                        value={formData.shipping_charge}
-                        onChange={handleChange}
-                        min="0"
-                        step="0.01"
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <div className="bg-light p-3 rounded-3 mb-3">
+                {/* Financial Summary */}
+                <div className="bg-light p-3 rounded-3 mt-3">
                   <Row>
-                    <Col md={6}>
-                      <h6 className="text-secondary mb-0">Discount: ₹{parseFloat(formData.discount_amount).toFixed(2)}</h6>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Subtotal</small>
+                      <strong>₹{formatCurrency(formData.subtotal)}</strong>
                     </Col>
-                    <Col md={6}>
-                      <h6 className="text-secondary mb-0">Total: ₹{parseFloat(formData.total_amount).toFixed(2)}</h6>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Discount</small>
+                      <strong className="text-danger">-₹{formatCurrency(formData.discount_amount)}</strong>
+                    </Col>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Tax Amount</small>
+                      <strong>₹{formatCurrency(formData.tax_amount)}</strong>
+                    </Col>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Shipping</small>
+                      <strong>₹{formatCurrency(formData.shipping_charge)}</strong>
                     </Col>
                   </Row>
+                  <hr className="my-2" />
+                  <div className="text-end">
+                    <small className="text-muted">Grand Total:</small>
+                    <strong className="text-primary fs-5 ms-2">₹{formatCurrency(formData.total_amount)}</strong>
+                  </div>
                 </div>
+              </div>
+            )}
 
-                <h6 className="fw-bold mb-3 mt-3">
-                  <FaTruck className="me-2 text-secondary" /> Shipping Information
-                </h6>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Delivery Address</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={2}
-                    name="delivery_address"
-                    value={formData.delivery_address}
-                    onChange={handleChange}
-                    placeholder="Enter delivery address"
-                  />
-                </Form.Group>
-
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Delivery Date</Form.Label>
-                      <Form.Control
-                        type="date"
-                        name="delivery_date"
-                        value={formData.delivery_date}
-                        onChange={handleChange}
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Notes</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={2}
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleChange}
-                    placeholder="Additional notes..."
-                  />
-                </Form.Group>
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* Order Items */}
-          <Col lg={12}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
+            {/* Order Items Tab */}
+            {activeTab === "items" && (
+              <div>
                 <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="fw-bold mb-0">
-                    <FaBox className="me-2 text-secondary" /> Order Items
+                  <h6 className="fw-bold mb-0" style={{ color: "rgb(30, 58, 111)" }}>
+                    <FaBox className="me-2" /> Order Items
                   </h6>
-                  <Button variant="outline-secondary" size="sm" onClick={addItem}>
-                    <FaPlus className="me-1" /> Add Item
+                  <Button variant="outline-secondary" size="sm" onClick={addItem} className="rounded-pill">
+                    <FaPlus className="me-1" size={12} /> Add Item
                   </Button>
                 </div>
+                <hr className="mt-0 mb-3" />
 
                 <div className="table-responsive">
-                  <Table bordered>
+                  <Table bordered className="mb-0" style={{ fontSize: "14px" }}>
                     <thead className="table-light">
                       <tr>
-                        <th>#</th>
+                        <th style={{ width: "40px" }}>#</th>
                         <th>Product *</th>
-                        <th style={{ width: "100px" }}>Quantity *</th>
+                        <th style={{ width: "100px" }}>Qty *</th>
                         <th style={{ width: "120px" }}>Unit Price</th>
-                        <th style={{ width: "80px" }}>Discount %</th>
+                        <th style={{ width: "80px" }}>Disc%</th>
                         <th style={{ width: "80px" }}>GST%</th>
                         <th style={{ width: "120px" }}>Total</th>
                         <th style={{ width: "50px" }}></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {items && items.length > 0 ? (
-                        items.map((item, index) => (
-                          <tr key={item.id}>
-                            <td className="text-center">{index + 1}</td>
-                            <td style={{ minWidth: "250px" }}>
-                              <Form.Select
-                                value={item.product_id}
-                                onChange={(e) => handleProductSelect(index, e.target.value)}
-                                isInvalid={!!errors[`item_${index}_product`]}
-                              >
-                                <option value="">Select Product</option>
-                                {products && products.length > 0 ? (
-                                  products.map((product) => (
-                                    <option key={product.id} value={product.id}>
-                                      {product.name} - ₹{product.price.toFixed(2)}
-                                    </option>
-                                  ))
-                                ) : (
-                                  <option disabled>No products available</option>
-                                )}
-                              </Form.Select>
-                              <Form.Control.Feedback type="invalid">
-                                {errors[`item_${index}_product`]}
-                              </Form.Control.Feedback>
-                            </td>
-                            <td>
-                              <Form.Control
-                                type="number"
-                                value={item.quantity}
-                                onChange={(e) => handleItemChange(index, "quantity", parseInt(e.target.value) || 0)}
-                                min="1"
-                                isInvalid={!!errors[`item_${index}_qty`]}
-                              />
-                              <Form.Control.Feedback type="invalid">
-                                {errors[`item_${index}_qty`]}
-                              </Form.Control.Feedback>
-                            </td>
-                            <td>
-                              <Form.Control
-                                type="number"
-                                value={item.unit_price}
-                                onChange={(e) => handleItemChange(index, "unit_price", parseFloat(e.target.value) || 0)}
-                                min="0"
-                                step="0.01"
-                              />
-                            </td>
-                            <td>
-                              <Form.Control
-                                type="number"
-                                value={item.discount_percent}
-                                onChange={(e) => handleItemChange(index, "discount_percent", parseFloat(e.target.value) || 0)}
-                                min="0"
-                                max="100"
-                                step="0.1"
-                              />
-                            </td>
-                            <td className="text-center">
-                              <Badge bg="secondary">{item.gst_rate}%</Badge>
-                            </td>
-                            <td className="text-end fw-semibold text-secondary">
-                              ₹{formatCurrency(item.total_amount)}
-                            </td>
-                            <td className="text-center">
-                              <Button
-                                variant="outline-secondary"
-                                size="sm"
-                                onClick={() => removeItem(index)}
-                                disabled={items.length === 1}
-                              >
-                                <FaTrash />
-                              </Button>
-                            </td>
+                      {items.map((item, index) => (
+                        <tr key={item.id}>
+                          <td className="text-center">{index + 1}</td>
+                          <td style={{ minWidth: "250px" }}>
+                            <Form.Select
+                              value={item.product_id}
+                              onChange={(e) => handleProductSelect(index, e.target.value)}
+                              isInvalid={!!errors[`item_${index}_product`]}
+                              size="sm"
+                              className="rounded-2"
+                            >
+                              <option value="">Select Product</option>
+                              {products.map((product) => (
+                                <option key={product.id} value={product.id}>
+                                  {product.name} - ₹{product.price.toFixed(2)}
+                                </option>
+                              ))}
+                            </Form.Select>
+                            {errors[`item_${index}_product`] && <Form.Text className="text-danger">{errors[`item_${index}_product`]}</Form.Text>}
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => handleItemChange(index, "quantity", parseInt(e.target.value) || 0)}
+                              min="1"
+                              size="sm"
+                              className="rounded-2"
+                              isInvalid={!!errors[`item_${index}_qty`]}
+                            />
+                            {errors[`item_${index}_qty`] && <Form.Text className="text-danger">{errors[`item_${index}_qty`]}</Form.Text>}
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="number"
+                              value={item.unit_price}
+                              onChange={(e) => handleItemChange(index, "unit_price", parseFloat(e.target.value) || 0)}
+                              min="0"
+                              step="0.01"
+                              size="sm"
+                              className="rounded-2"
+                            />
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="number"
+                              value={item.discount_percent}
+                              onChange={(e) => handleItemChange(index, "discount_percent", parseFloat(e.target.value) || 0)}
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              size="sm"
+                              className="rounded-2"
+                            />
+                          </td>
+                          <td className="text-center">
+                            <span className="badge bg-secondary px-3 py-2 rounded-pill">{item.gst_rate}%</span>
+                          </td>
+                          <td className="text-end fw-semibold">₹{formatCurrency(item.total_amount)}</td>
+                          <td className="text-center">
+                            <Button variant="outline-secondary" size="sm" onClick={() => removeItem(index)} disabled={items.length === 1} className="rounded-circle" style={{ width: "32px", height: "32px", padding: "0" }}>
+                              <FaTrash size={12} />
+                            </Button>
+                           </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="8" className="text-center">No items added</td>
-                        </tr>
-                      )}
+                      ))}
                     </tbody>
                     <tfoot className="table-light">
-                      <tr className="table-secondary">
+                      <tr className="table-active">
                         <td colSpan="6" className="text-end fw-bold">Grand Total:</td>
-                        <td className="text-end fw-bold text-secondary fs-5">
-                          ₹{formatCurrency(formData.total_amount)}
-                        </td>
-                        <td></td>
+                        <td colSpan="2" className="text-end fw-bold text-primary fs-5">₹{formatCurrency(formData.total_amount)}</td>
                       </tr>
                     </tfoot>
                   </Table>
                 </div>
                 {errors.items && <small className="text-danger">{errors.items}</small>}
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-
-        {/* Action Buttons */}
-        <div className="d-flex justify-content-end gap-3 mt-4">
-          <Button
-            variant="secondary"
-            onClick={() => navigate("/orders")}
-            className="rounded-pill px-4"
-            disabled={submitting}
-          >
-            <FaTimes className="me-2" /> Cancel
-          </Button>
-          <Button
-            variant="secondary"
-            type="submit"
-            disabled={submitting}
-            className="rounded-pill px-4"
-          >
-            {submitting ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Updating...
-              </>
-            ) : (
-              <>
-                <FaSave className="me-2" /> Update Order
-              </>
+              </div>
             )}
-          </Button>
-        </div>
+          </Card.Body>
+
+          {/* Action Buttons inside Card Footer */}
+          <Card.Footer className="bg-white border-top-0 pb-4 px-4">
+            <div className="d-flex justify-content-between gap-3">
+              <Button
+                onClick={() => navigate("/orders")}
+                style={{
+                  backgroundColor: "#6c757d",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#fff",
+                }}
+              >
+                <FaTimes size={14} /> Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  backgroundColor: "rgb(30, 58, 111)",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 28px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
+                }}
+              >
+                {submitting ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <FaSave size={14} /> Update Order
+                  </>
+                )}
+              </Button>
+            </div>
+          </Card.Footer>
+        </Card>
       </Form>
 
       <style>{`
         .rounded-3 {
-          border-radius: 0.75rem !important;
+          border-radius: 12px !important;
+        }
+        .rounded-2 {
+          border-radius: 8px !important;
+        }
+        .form-label {
+          margin-bottom: 0.5rem;
+          font-size: 13px;
+        }
+        .form-text {
+          font-size: 11px;
+          margin-top: 0.25rem;
+        }
+        .badge {
+          font-weight: 500;
+        }
+        .nav-tabs {
+          border-bottom: none !important;
+        }
+        .nav-link {
+          border: none;
+          color: #6c757d;
+          padding: 10px 16px;
+          font-size: 14px;
+          transition: all 0.2s;
+          border-radius: 30px;
+          margin-right: 8px;
+        }
+        .nav-link:hover {
+          color: rgb(30, 58, 111);
+          background: #f1f5f9;
+        }
+        .nav-link.active {
+          color: rgb(30, 58, 111);
+          background: #eef2ff;
+          border: none;
+        }
+        .bg-light {
+          background-color: #f8f9fa !important;
         }
       `}</style>
     </Container>

@@ -4,7 +4,6 @@ import {
   Card,
   Table,
   Button,
-  Badge,
   Form,
   Row,
   Col,
@@ -22,11 +21,9 @@ import {
   FaShoppingCart,
   FaFilter,
   FaTimes,
-  FaArrowLeft,
-  FaHome,
-  FaUser,
-  FaCalendarAlt,
   FaRupeeSign,
+  FaCalendarAlt,
+  FaUser,
   FaBox,
   FaCheckCircle,
   FaClock,
@@ -34,46 +31,41 @@ import {
   FaTruck,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import { getOrders, deleteOrder } from "../../api/tenant/order.api";
+import { getOrders, deleteOrder, updateOrderStatus } from "../../api/tenant/order.api";
+import { ToastContainer, toast, Bounce } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import Swal from "sweetalert2";
 
-// Toast helper functions for delete only
-const showDeleteSuccessToast = (title, timer = 2000) => {
-  const Toast = Swal.mixin({
-    toast: true,
-    position: "top-end",
-    showConfirmButton: false,
-    timer: timer,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-      toast.addEventListener("mouseenter", Swal.stopTimer);
-      toast.addEventListener("mouseleave", Swal.resumeTimer);
-    },
-  });
-  
-  Toast.fire({
-    icon: "success",
-    title: title,
-  });
+// Order status color mapping (matching Expenses list style)
+const statusConfig = {
+  pending: { bg: "#FEF6D7", color: "#FED229", label: "Pending", icon: "clock" },
+  confirmed: { bg: "#D3EAFF", color: "#437EF7", label: "Confirmed", icon: "check" },
+  processing: { bg: "#FFE0CB", color: "#FF8532", label: "Processing", icon: "sync" },
+  filled: { bg: "#D3EAFF", color: "#437EF7", label: "Filled", icon: "box" },
+  quality_check: { bg: "#FEF6D7", color: "#FED229", label: "Quality Check", icon: "check" },
+  ready_for_dispatch: { bg: "#ECFDF3", color: "#027A48", label: "Ready to Dispatch", icon: "box" },
+  dispatched: { bg: "#D3EAFF", color: "#437EF7", label: "Dispatched", icon: "truck" },
+  out_for_delivery: { bg: "#FFE0CB", color: "#FF8532", label: "Out for Delivery", icon: "truck" },
+  delivered: { bg: "#ECFDF3", color: "#027A48", label: "Delivered", icon: "check" },
+  completed: { bg: "#ECFDF3", color: "#027A48", label: "Completed", icon: "check" },
+  cancelled: { bg: "#FFDCE2", color: "#F94765", label: "Cancelled", icon: "ban" },
+  returned: { bg: "#FFDCE2", color: "#F94765", label: "Returned", icon: "ban" },
+  failed: { bg: "#FFF2F0", color: "#E2341D", label: "Failed", icon: "ban" },
 };
 
-const showDeleteErrorToast = (title, timer = 4000) => {
-  const Toast = Swal.mixin({
-    toast: true,
-    position: "top-end",
-    showConfirmButton: false,
-    timer: timer,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-      toast.addEventListener("mouseenter", Swal.stopTimer);
-      toast.addEventListener("mouseleave", Swal.resumeTimer);
-    },
-  });
-  
-  Toast.fire({
-    icon: "error",
-    title: title,
-  });
+// Order type color mapping
+const orderTypeConfig = {
+  sales: { bg: "#ECFDF3", color: "#027A48", label: "Sales" },
+  purchase: { bg: "#D3EAFF", color: "#437EF7", label: "Purchase" },
+  return: { bg: "#FFDCE2", color: "#F94765", label: "Return" },
+};
+
+// Payment status color mapping
+const paymentStatusConfig = {
+  paid: { bg: "#ECFDF3", color: "#027A48", label: "Paid" },
+  pending: { bg: "#FFDCE2", color: "#F94765", label: "Pending" },
+  partial: { bg: "#FEF6D7", color: "#FED229", label: "Partial" },
+  refunded: { bg: "#FFF2F0", color: "#E2341D", label: "Refunded" },
 };
 
 const Orders = () => {
@@ -84,6 +76,7 @@ const Orders = () => {
   const [orderTypeFilter, setOrderTypeFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [activeDropdown, setActiveDropdown] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -96,48 +89,18 @@ const Orders = () => {
     setErrorMessage("");
     try {
       const response = await getOrders();
-      console.log("=== FULL API RESPONSE ===");
-      console.log("Response status:", response?.status);
-      console.log("Response data:", response?.data);
-
       let ordersData = [];
 
       if (response?.data?.data && Array.isArray(response.data.data)) {
         ordersData = response.data.data;
-        console.log(
-          "Found orders in response.data.data, count:",
-          ordersData.length,
-        );
       } else if (response?.data && Array.isArray(response.data)) {
         ordersData = response.data;
-        console.log("Found orders in response.data, count:", ordersData.length);
       } else if (Array.isArray(response)) {
         ordersData = response;
-        console.log("Found orders in response, count:", ordersData.length);
-      } else if (
-        response?.data?.data?.data &&
-        Array.isArray(response.data.data.data)
-      ) {
+      } else if (response?.data?.data?.data && Array.isArray(response.data.data.data)) {
         ordersData = response.data.data.data;
-        console.log(
-          "Found orders in response.data.data.data, count:",
-          ordersData.length,
-        );
-      } else if (
-        response?.data?.data?.orders &&
-        Array.isArray(response.data.data.orders)
-      ) {
+      } else if (response?.data?.data?.orders && Array.isArray(response.data.data.orders)) {
         ordersData = response.data.data.orders;
-        console.log(
-          "Found orders in response.data.data.orders, count:",
-          ordersData.length,
-        );
-      } else {
-        console.warn(
-          "Could not find orders array. Response structure:",
-          response,
-        );
-        setErrorMessage("Unable to parse orders data. Please check console.");
       }
 
       if (ordersData.length > 0) {
@@ -166,13 +129,9 @@ const Orders = () => {
           updated_at: order.updated_at,
           items: order.items || [],
         }));
-
-        console.log("Formatted orders:", formattedOrders);
         setOrders(formattedOrders);
       } else {
-        console.log("No orders found in response");
         setOrders([]);
-        setErrorMessage("No orders found. Create your first order!");
       }
     } catch (error) {
       console.error("Failed to load orders:", error);
@@ -211,113 +170,31 @@ const Orders = () => {
     if (result.isConfirmed) {
       try {
         await deleteOrder(id);
-        showDeleteSuccessToast(`Order ${orderNo} deleted successfully`);
+        toast.success(`✓ Order "${orderNo}" deleted successfully!`, {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: "colored",
+          transition: Bounce,
+        });
         await loadOrders();
       } catch (error) {
         console.error("Delete error:", error);
-        showDeleteErrorToast(error.response?.data?.message || "Failed to delete order");
+        toast.error(`✗ ${error.response?.data?.message || "Failed to delete order"}`, {
+          position: "top-right",
+          autoClose: 4000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: "colored",
+          transition: Bounce,
+        });
       }
     }
-  };
-
- const getStatusBadge = (status) => {
-    const statusConfig = {
-      pending: { 
-        bg: "hsl(227, 81%, 42%)", 
-        text: "Pending", 
-        color: "#ffffff" 
-      },
-      confirmed: { 
-        bg: "hsl(188, 78%, 41%)", 
-        text: "Confirmed", 
-        color: "#ffffff" 
-      },
-      processing: { 
-        bg: "hsl(211, 100%, 50%)", 
-        text: "Processing", 
-        color: "#ffffff" 
-      },
-      shipped: { 
-        bg: "hsl(210, 11%, 61%)", 
-        text: "Shipped", 
-        color: "#ffffff" 
-      },
-      delivered: { 
-        bg: "hsl(134, 61%, 41%)", 
-        text: "Delivered", 
-        color: "#ffffff" 
-      },
-      completed: { 
-        bg: "hsl(134, 61%, 41%)", 
-        text: "Completed", 
-        color: "#ffffff" 
-      },
-      cancelled: { 
-        bg: "hsl(354, 70%, 54%)", 
-        text: "Cancelled", 
-        color: "#ffffff" 
-      },
-    };
-    const config = statusConfig[status] || statusConfig.pending;
-    return (
-      <Badge 
-        style={{
-          backgroundColor: config.bg,
-          color: config.color,
-          padding: "6px 12px",
-          borderRadius: "20px",
-          fontWeight: "500",
-          display: "inline-block"
-        }}
-      >
-        {config.text}
-      </Badge>
-    );
-  };
-
-  const getPaymentStatusBadge = (status) => {
-    const statusConfig = {
-      pending: { bg: "secondary", text: "Pending" },
-      paid: { bg: "secondary", text: "Paid" },
-      partial: { bg: "secondary", text: "Partial" },
-      refunded: { bg: "secondary", text: "Refunded" },
-    };
-    const config = statusConfig[status] || statusConfig.pending;
-    return (
-      <Badge bg={config.bg} className="rounded-pill px-2 py-1">
-        {config.text}
-      </Badge>
-    );
-  };
-
-  const getOrderTypeBadge = (type) => {
-    const typeConfig = {
-      sales: { bg: "secondary", text: "Sales" },
-      purchase: { bg: "secondary", text: "Purchase" },
-      return: { bg: "secondary", text: "Return" },
-    };
-    const config = typeConfig[type] || typeConfig.sales;
-    return (
-      <Badge bg={config.bg} className="rounded-pill px-2 py-1">
-        {config.text}
-      </Badge>
-    );
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-IN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount || 0);
   };
 
   const clearFilters = () => {
@@ -332,10 +209,8 @@ const Orders = () => {
       order.order_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === "all" || order.status === statusFilter;
-    const matchesOrderType =
-      orderTypeFilter === "all" || order.order_type === orderTypeFilter;
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+    const matchesOrderType = orderTypeFilter === "all" || order.order_type === orderTypeFilter;
 
     return matchesSearch && matchesStatus && matchesOrderType;
   });
@@ -349,9 +224,39 @@ const Orders = () => {
     totalAmount: orders.reduce((sum, o) => sum + (o.total_amount || 0), 0),
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "Recently";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount || 0);
+  };
+
   if (loading) {
     return (
-      <Container fluid className="p-4 bg-light">
+      <Container fluid className="p-4">
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+          transition={Bounce}
+        />
         <div className="text-center py-5">
           <Spinner animation="border" variant="secondary" size="lg" />
           <h4 className="mt-3">Loading orders...</h4>
@@ -361,103 +266,227 @@ const Orders = () => {
   }
 
   return (
-    <Container fluid className="p-4 bg-light">
+    <Container
+      fluid
+      className="px-4 py-3"
+      style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+    >
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+        transition={Bounce}
+      />
+
+      {errorMessage && (
+        <Alert
+          variant="danger"
+          className="mb-3"
+          onClose={() => setErrorMessage("")}
+          dismissible
+        >
+          {errorMessage}
+        </Alert>
+      )}
+
+      {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="fw-bold mb-1">
-            <FaShoppingCart className="me-2 text-secondary" /> Order Management
+          {/* <h2 className="fw-bold mb-1" style={{ color: "#1a1a2e" }}>
+            Order Management
           </h2>
-          <p className="text-muted">
-            Manage all customer orders and track status
-          </p>
+          <p className="text-muted mb-0">Manage cylinder orders and track delivery status</p> */}
         </div>
-        <Button variant="secondary" onClick={handleAdd}>
-          <FaPlus className="me-2" /> Create Order
+        <Button
+          onClick={handleAdd}
+          style={{
+            backgroundColor: "rgb(30, 58, 111)",
+            border: "none",
+            borderRadius: "14px",
+            padding: "12px 22px",
+            fontWeight: "600",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
+          }}
+        >
+          <FaPlus size={14} />
+          Create Order
         </Button>
       </div>
 
       {/* Stats Cards */}
       <Row className="g-3 mb-4">
-        <Col md={2}>
-          <Card className="border-0 shadow-sm rounded-3">
-            <Card.Body className="text-center">
-              <small className="text-muted">Total Orders</small>
-              <h3 className="fw-bold mb-0">{stats.total}</h3>
+        <Col md={3}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
+            <Card.Body className="py-2 px-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Total Orders
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    {stats.total}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    {stats.total} entries
+                  </small>
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#FFDCE2",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaShoppingCart size={18} style={{ color: "#F94765" }} />
+                </div>
+              </div>
             </Card.Body>
           </Card>
         </Col>
-        <Col md={2}>
-          <Card className="border-0 shadow-sm rounded-3">
-            <Card.Body className="text-center">
-              <small className="text-muted">Pending</small>
-              <h3 className="fw-bold text-secondary mb-0">{stats.pending}</h3>
+
+        <Col md={3}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
+            <Card.Body className="py-2 px-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Pending
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    {stats.pending}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    Awaiting confirmation
+                  </small>
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#FEF6D7",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaClock size={18} style={{ color: "#FED229" }} />
+                </div>
+              </div>
             </Card.Body>
           </Card>
         </Col>
-        <Col md={2}>
-          <Card className="border-0 shadow-sm rounded-3">
-            <Card.Body className="text-center">
-              <small className="text-muted">Processing</small>
-              <h3 className="fw-bold text-secondary mb-0">
-                {stats.processing}
-              </h3>
+
+        <Col md={3}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
+            <Card.Body className="py-2 px-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Processing
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    {stats.processing}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    In progress
+                  </small>
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#FFE0CB",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaBox size={18} style={{ color: "#FF8532" }} />
+                </div>
+              </div>
             </Card.Body>
           </Card>
         </Col>
-        <Col md={2}>
-          <Card className="border-0 shadow-sm rounded-3">
-            <Card.Body className="text-center">
-              <small className="text-muted">Delivered</small>
-              <h3 className="fw-bold text-secondary mb-0">{stats.delivered}</h3>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={2}>
-          <Card className="border-0 shadow-sm rounded-3">
-            <Card.Body className="text-center">
-              <small className="text-muted">Cancelled</small>
-              <h3 className="fw-bold text-secondary mb-0">{stats.cancelled}</h3>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={2}>
-          <Card className="border-0 shadow-sm rounded-3">
-            <Card.Body className="text-center">
-              <small className="text-muted">Total Value</small>
-              <h3 className="fw-bold text-secondary mb-0">
-                ₹{formatCurrency(stats.totalAmount)}
-              </h3>
+
+        <Col md={3}>
+          <Card
+            className="border-0"
+            style={{
+              borderRadius: "10px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+            }}
+          >
+            <Card.Body className="py-2 px-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <small className="text-muted mb-0" style={{ fontSize: "11px" }}>
+                    Total Amount
+                  </small>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "20px" }}>
+                    ₹{formatCurrency(stats.totalAmount)}
+                  </h5>
+                  <small className="text-muted" style={{ fontSize: "9px" }}>
+                    All orders
+                  </small>
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#D3EAFF",
+                    padding: "8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <FaRupeeSign size={18} style={{ color: "#437EF7" }} />
+                </div>
+              </div>
             </Card.Body>
           </Card>
         </Col>
       </Row>
 
-      {/* Error Alert */}
-      {errorMessage && (
-        <Alert variant="secondary" className="mb-4">
-          <div className="d-flex align-items-center">
-            <FaShoppingCart size={24} className="me-3" />
-            <div>
-              <strong>{errorMessage}</strong>
-            </div>
-          </div>
-        </Alert>
-      )}
-
-      {/* Search and Filter */}
-      <Card className="border-0 shadow-sm mb-4 rounded-3">
-        <Card.Body>
+      {/* Search and Filter Section */}
+      <Card
+        className="border-0 mb-4"
+        style={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}
+      >
+        <Card.Body className="py-3">
           <Row>
-            <Col md={6}>
+            <Col md={4}>
               <InputGroup>
-                <InputGroup.Text>
-                  <FaSearch />
+                <InputGroup.Text
+                  style={{ backgroundColor: "#fff", borderRight: "none" }}
+                >
+                  <FaSearch className="text-muted" />
                 </InputGroup.Text>
                 <Form.Control
                   type="text"
-                  placeholder="Search by order no, customer name..."
+                  placeholder="Search by order number or customer..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{ borderLeft: "none" }}
                 />
                 {searchTerm && (
                   <Button
@@ -474,22 +503,19 @@ const Orders = () => {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="processing">Processing</option>
-                <option value="shipped">Shipped</option>
-                <option value="delivered">Delivered</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="all">All Status ({stats.total})</option>
+                <option value="pending">Pending ({stats.pending})</option>
+                <option value="processing">Processing ({stats.processing})</option>
+                <option value="delivered">Delivered ({stats.delivered})</option>
+                <option value="cancelled">Cancelled ({stats.cancelled})</option>
               </Form.Select>
             </Col>
-            <Col md={2}>
+            <Col md={3}>
               <Form.Select
                 value={orderTypeFilter}
                 onChange={(e) => setOrderTypeFilter(e.target.value)}
               >
-                <option value="all">All Types</option>
+                <option value="all">All Types ({stats.total})</option>
                 <option value="sales">Sales</option>
                 <option value="purchase">Purchase</option>
                 <option value="return">Return</option>
@@ -500,109 +526,342 @@ const Orders = () => {
                 variant="outline-secondary"
                 onClick={clearFilters}
                 className="w-100"
+                title="Clear filters"
               >
                 <FaFilter />
               </Button>
             </Col>
           </Row>
+
+          {/* Active Filters Display */}
+          {(statusFilter !== "all" || orderTypeFilter !== "all" || searchTerm) && (
+            <div className="mt-3 pt-2 border-top">
+              <small className="text-muted me-2">Active filters:</small>
+              {statusFilter !== "all" && (
+                <span
+                  style={{
+                    backgroundColor: "#6c757d",
+                    color: "white",
+                    cursor: "pointer",
+                    padding: "8px 12px",
+                    marginRight: "8px",
+                    borderRadius: "20px",
+                    display: "inline-block",
+                    fontSize: "12px",
+                  }}
+                  onClick={() => setStatusFilter("all")}
+                >
+                  Status: {statusConfig[statusFilter]?.label || statusFilter} <FaTimes size={10} className="ms-2" />
+                </span>
+              )}
+              {orderTypeFilter !== "all" && (
+                <span
+                  style={{
+                    backgroundColor: "#6c757d",
+                    color: "white",
+                    cursor: "pointer",
+                    padding: "8px 12px",
+                    marginRight: "8px",
+                    borderRadius: "20px",
+                    display: "inline-block",
+                    fontSize: "12px",
+                  }}
+                  onClick={() => setOrderTypeFilter("all")}
+                >
+                  Type: {orderTypeConfig[orderTypeFilter]?.label || orderTypeFilter} <FaTimes size={10} className="ms-2" />
+                </span>
+              )}
+              {searchTerm && (
+                <span
+                  style={{
+                    backgroundColor: "#6c757d",
+                    color: "white",
+                    cursor: "pointer",
+                    padding: "8px 12px",
+                    marginRight: "8px",
+                    borderRadius: "20px",
+                    display: "inline-block",
+                    fontSize: "12px",
+                  }}
+                  onClick={() => setSearchTerm("")}
+                >
+                  Search: "{searchTerm}" <FaTimes size={10} className="ms-2" />
+                </span>
+              )}
+              <Button
+                variant="link"
+                size="sm"
+                onClick={clearFilters}
+                className="p-0 ms-2"
+              >
+                Clear all
+              </Button>
+            </div>
+          )}
         </Card.Body>
       </Card>
 
+      {/* Results Summary */}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <p className="text-muted mb-0">
+          Showing {filteredOrders.length} of {orders.length} orders
+        </p>
+      </div>
+
       {/* Orders Table */}
-      <Card className="border-0 shadow-sm rounded-3">
+      <Card
+        className="border-0"
+        style={{
+          borderRadius: "12px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          overflow: "hidden",
+        }}
+      >
         <Card.Body className="p-0">
           <div className="table-responsive">
-            <Table hover className="mb-0">
-              <thead className="table-light">
+            <Table hover className="mb-0" style={{ fontSize: "14px" }}>
+              <thead
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  borderBottom: "2px solid #dee2e6",
+                }}
+              >
                 <tr>
-                  <th>ID</th>
-                  <th>Order No</th>
-                  <th>Date</th>
-                  <th>Customer</th>
-                  <th>Type</th>
-                  <th>Items</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th>Payment</th>
-                  <th>Actions</th>
+                  <th style={{ padding: "16px 12px" }}>Order Details</th>
+                  <th style={{ padding: "16px 12px" }}>Customer</th>
+                  <th style={{ padding: "16px 12px" }}>Type</th>
+                  <th style={{ padding: "16px 12px" }}>Amount</th>
+                  <th style={{ padding: "16px 12px" }}>Status</th>
+                  <th style={{ padding: "16px 12px" }}>Payment</th>
+                  <th style={{ padding: "16px 12px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => (
-                    <tr key={order.id}>
-                      <td>{order.id}</td>
-                      <td className="text-secondary fw-semibold">
-                        {order.order_no}
-                       </td>
-                      <td>{formatDate(order.order_date)}</td>
-                      <td>{order.customer_name || "N/A"}</td>
-                      <td>{getOrderTypeBadge(order.order_type)}</td>
-                      <td className="text-center">
-                        <Badge bg="secondary" className="rounded-pill">
-                          {order.items?.length || 0}
-                        </Badge>
-                       </td>
-                      <td className="fw-bold">
-                        ₹{formatCurrency(order.total_amount)}
-                       </td>
-                      <td>{getStatusBadge(order.status)}</td>
-                      <td>{getPaymentStatusBadge(order.payment_status)}</td>
-                      <td>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          className="me-1 rounded-circle"
+                {filteredOrders.map((order) => {
+                  const orderDate = formatDate(order.order_date);
+                  return (
+                    <tr
+                      key={order.id}
+                      style={{ borderBottom: "1px solid #e9ecef" }}
+                    >
+                      {/* Order Details */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <div className="fw-semibold">{order.order_no}</div>
+                        <small className="text-muted">
+                          {/* <FaCalendarAlt size={10} className="me-1" /> */}
+                          {orderDate}
+                        </small>
+                        {/* <div>
+                          <small className="text-muted" style={{ fontSize: "11px" }}>
+                            Items: {order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0}
+                          </small>
+                        </div> */}
+                      </td>
+
+                      {/* Customer */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <div>
+                          <FaUser size={12} className="text-muted me-1" />
+                          <span className="fw-semibold">{order.customer_name || "N/A"}</span>
+                        </div>
+                      </td>
+
+                      {/* Order Type */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span
                           style={{
-                            width: "32px",
-                            height: "32px",
-                            padding: "0",
+                            padding: "6px 14px",
+                            borderRadius: "20px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            backgroundColor: orderTypeConfig[order.order_type]?.bg || "#f3f4f6",
+                            color: orderTypeConfig[order.order_type]?.color || "#1e293b",
+                            border: "none",
+                            display: "inline-block",
                           }}
-                          onClick={() => handleView(order)}
                         >
-                          <FaEye />
-                        </Button>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          className="me-1 rounded-circle"
+                          {orderTypeConfig[order.order_type]?.label || order.order_type}
+                        </span>
+                      </td>
+
+                      {/* Amount */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span className="fw-bold">
+                          ₹{formatCurrency(order.total_amount)}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span
                           style={{
-                            width: "32px",
-                            height: "32px",
-                            padding: "0",
+                            padding: "6px 14px",
+                            borderRadius: "20px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            backgroundColor: statusConfig[order.status]?.bg || "#f3f4f6",
+                            color: statusConfig[order.status]?.color || "#1e293b",
+                            border: "none",
+                            display: "inline-block",
                           }}
-                          onClick={() => handleEdit(order.id)}
                         >
-                          <FaEdit />
-                        </Button>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          className="rounded-circle"
+                          {statusConfig[order.status]?.label || order.status}
+                        </span>
+                      </td>
+
+                      {/* Payment Status */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <span
                           style={{
-                            width: "32px",
-                            height: "32px",
-                            padding: "0",
+                            padding: "6px 14px",
+                            borderRadius: "20px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            backgroundColor: paymentStatusConfig[order.payment_status]?.bg || "#f3f4f6",
+                            color: paymentStatusConfig[order.payment_status]?.color || "#1e293b",
+                            border: "none",
+                            display: "inline-block",
                           }}
-                          onClick={() => handleDelete(order.id, order.order_no)}
                         >
-                          <FaTrash />
-                        </Button>
-                       </td>
-                     </tr>
-                  ))
-                ) : (
+                          {paymentStatusConfig[order.payment_status]?.label || order.payment_status}
+                        </span>
+                      </td>
+
+                      {/* Actions Dropdown */}
+                      <td style={{ padding: "16px 12px" }}>
+                        <div className="action-dropdown">
+                          <button
+                            className="action-trigger"
+                            onClick={() =>
+                              setActiveDropdown(
+                                activeDropdown === order.id ? null : order.id,
+                              )
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "4px",
+                              borderRadius: "6px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "background-color 0.2s",
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor = "#f1f5f9")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor = "transparent")
+                            }
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                              <circle cx="12" cy="6" r="2" fill="currentColor" />
+                              <circle cx="12" cy="12" r="2" fill="currentColor" />
+                              <circle cx="12" cy="18" r="2" fill="currentColor" />
+                            </svg>
+                          </button>
+
+                          {activeDropdown === order.id && (
+                            <div className="dropdown-menu-custom">
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleView(order);
+                                }}
+                                className="dropdown-item-custom"
+                                title="View Details"
+                              >
+                                <FaEye style={{ color: "#4361ee", fontSize: "14px" }} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleEdit(order.id);
+                                }}
+                                className="dropdown-item-custom"
+                                title="Edit"
+                              >
+                                <FaEdit style={{ color: "#ff9800", fontSize: "14px" }} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveDropdown(null);
+                                  handleDelete(order.id, order.order_no);
+                                }}
+                                className="dropdown-item-custom delete"
+                                title="Delete"
+                              >
+                                <FaTrash style={{ color: "#dc3545", fontSize: "14px" }} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <style>{`
+                          .action-dropdown { position: relative; }
+                          .action-trigger { color: #64748b; transition: all 0.2s; }
+                          .action-trigger:hover { color: #1e293b; }
+                          .dropdown-menu-custom {
+                            position: absolute;
+                            top: 100%;
+                            right: 0;
+                            margin-top: 4px;
+                            min-width: 40px;
+                            background: white;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            z-index: 1000;
+                            overflow: hidden;
+                            animation: dropdownSlide 0.2s ease;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 2px;
+                            padding: 4px;
+                          }
+                          @keyframes dropdownSlide {
+                            from { opacity: 0; transform: translateY(-5px); }
+                            to { opacity: 1; transform: translateY(0); }
+                          }
+                          .dropdown-item-custom {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            width: 100%;
+                            padding: 6px;
+                            border: none;
+                            background: white;
+                            cursor: pointer;
+                            transition: background-color 0.2s;
+                            border-radius: 6px;
+                          }
+                          .dropdown-item-custom:hover { background-color: #f8fafc; }
+                          .dropdown-item-custom.delete:hover { background-color: #fef2f2; }
+                        `}</style>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredOrders.length === 0 && (
                   <tr>
-                    <td colSpan="10" className="text-center py-5">
-                      <FaShoppingCart size={50} className="text-muted mb-3" />
-                      <h5>No orders found</h5>
-                      <Button
-                        variant="secondary"
-                        onClick={handleAdd}
-                        className="mt-2"
-                      >
-                        Create First Order
-                      </Button>
+                    <td colSpan="7" className="text-center py-5">
+                      <div className="py-4">
+                        <FaShoppingCart size={40} className="text-muted mb-3" />
+                        <h5 className="text-muted">No orders found</h5>
+                        <p className="text-muted small">
+                          Try adjusting your search or filter criteria
+                        </p>
+                        <Button 
+                          style={{
+                            backgroundColor: "rgb(30, 58, 111)",
+                            border: "none"
+                          }}
+                          size="sm" 
+                          onClick={clearFilters}
+                        >
+                          Clear all filters
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -613,82 +872,106 @@ const Orders = () => {
       </Card>
 
       {/* View Order Modal */}
-      <Modal
-        show={showViewModal}
-        onHide={() => setShowViewModal(false)}
-        size="lg"
-        centered
-      >
-        <Modal.Header closeButton className="bg-secondary text-white">
-          <Modal.Title>Order Details - {selectedOrder?.order_no}</Modal.Title>
+      <Modal show={showViewModal} onHide={() => setShowViewModal(false)} size="lg" centered>
+        <Modal.Header closeButton className="border-0">
+          <Modal.Title className="fw-bold">
+            <FaEye className="me-2 text-secondary" /> Order Details
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="p-4">
           {selectedOrder && (
             <>
-              <Row>
+              <Row className="mb-3">
                 <Col md={6}>
-                  <strong>Order Date:</strong>{" "}
-                  {formatDate(selectedOrder.order_date)}
-                  <br />
-                  <strong>Customer:</strong> {selectedOrder.customer_name}
-                  <br />
-                  <strong>Order Type:</strong> {selectedOrder.order_type}
-                  <br />
-                  <strong>Status:</strong>{" "}
-                  {getStatusBadge(selectedOrder.status)}
+                  <small className="text-muted">Order Number</small>
+                  <p className="fw-bold mb-0">{selectedOrder.order_no}</p>
                 </Col>
                 <Col md={6}>
-                  <strong>Payment Status:</strong>{" "}
-                  {getPaymentStatusBadge(selectedOrder.payment_status)}
-                  <br />
-                  <strong>Total Amount:</strong> ₹
-                  {formatCurrency(selectedOrder.total_amount)}
-                  <br />
-                  <strong>Notes:</strong> {selectedOrder.notes || "N/A"}
+                  <small className="text-muted">Order Date</small>
+                  <p className="fw-bold mb-0">{formatDate(selectedOrder.order_date)}</p>
                 </Col>
               </Row>
-
-              <h6 className="mt-3">Order Items</h6>
-              <Table bordered size="sm">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedOrder.items?.map((item, idx) => (
-                    <tr key={idx}>
-                      <td>{item.product_name}</td>
-                      <td className="text-center">{item.quantity}</td>
-                      <td className="text-end">
-                        ₹{formatCurrency(item.unit_price)}
-                      </td>
-                      <td className="text-end">
-                        ₹{formatCurrency(item.total_amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
+              <Row className="mb-3">
+                <Col md={6}>
+                  <small className="text-muted">Customer</small>
+                  <p className="fw-bold mb-0">{selectedOrder.customer_name || "N/A"}</p>
+                </Col>
+                <Col md={6}>
+                  <small className="text-muted">Order Type</small>
+                  <div>{orderTypeConfig[selectedOrder.order_type]?.label || selectedOrder.order_type}</div>
+                </Col>
+              </Row>
+              <Row className="mb-3">
+                <Col md={6}>
+                  <small className="text-muted">Order Status</small>
+                  <div className="mt-1">
+                    <span
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                        backgroundColor: statusConfig[selectedOrder.status]?.bg || "#f3f4f6",
+                        color: statusConfig[selectedOrder.status]?.color || "#1e293b",
+                        border: "none",
+                        display: "inline-block",
+                      }}
+                    >
+                      {statusConfig[selectedOrder.status]?.label || selectedOrder.status}
+                    </span>
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <small className="text-muted">Payment Status</small>
+                  <div className="mt-1">
+                    <span
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                        backgroundColor: paymentStatusConfig[selectedOrder.payment_status]?.bg || "#f3f4f6",
+                        color: paymentStatusConfig[selectedOrder.payment_status]?.color || "#1e293b",
+                        border: "none",
+                        display: "inline-block",
+                      }}
+                    >
+                      {paymentStatusConfig[selectedOrder.payment_status]?.label || selectedOrder.payment_status}
+                    </span>
+                  </div>
+                </Col>
+              </Row>
+              <Row className="mb-3">
+                <Col md={12}>
+                  <small className="text-muted">Total Amount</small>
+                  <p className="fw-bold text-primary fs-5 mb-0">₹{formatCurrency(selectedOrder.total_amount)}</p>
+                </Col>
+              </Row>
             </>
           )}
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowViewModal(false)}>
-            Close
-          </Button>
-          <Button
+        <Modal.Footer className="bg-light rounded-bottom-3 border-0">
+          {/* <Button
             variant="secondary"
-            onClick={() => {
-              setShowViewModal(false);
-              handleEdit(selectedOrder?.id);
-            }}
+            onClick={() => setShowViewModal(false)}
+            style={{ backgroundColor: "#6c757d", border: "none" }}
           >
-            Edit Order
-          </Button>
+            Close
+          </Button> */}
+          {selectedOrder && (
+            <Button
+              onClick={() => {
+                setShowViewModal(false);
+                handleEdit(selectedOrder.id);
+              }}
+              style={{
+                backgroundColor: "rgb(30, 58, 111)",
+                border: "none"
+              }}
+            >
+              <FaEdit className="me-2" /> Edit Order
+            </Button>
+          )}
         </Modal.Footer>
       </Modal>
     </Container>

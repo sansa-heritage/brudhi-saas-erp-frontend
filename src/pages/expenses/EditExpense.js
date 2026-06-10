@@ -18,9 +18,11 @@ import {
   FaCalendarAlt,
   FaTag,
   FaCheckCircle,
-  FaHome,
-  FaUser,
+  FaTimes,
   FaFileInvoice,
+  FaUser,
+  FaCreditCard,
+  FaInfoCircle,
 } from "react-icons/fa";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -32,6 +34,7 @@ const EditExpense = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState("expense");
   const [formErrors, setFormErrors] = useState({});
 
   const [formData, setFormData] = useState({
@@ -215,7 +218,7 @@ const EditExpense = () => {
 
       await updateExpense(id, expenseData);
 
-      toast.success(`✓ Expense updated successfully!`, {
+      toast.success(`✅ Expense updated successfully! 🎉`, {
         position: "top-right",
         autoClose: 3000,
         hideProgressBar: false,
@@ -239,7 +242,7 @@ const EditExpense = () => {
         errorMessage = error.message;
       }
 
-      toast.error(`✗ ${errorMessage}`, {
+      toast.error(`❌ ${errorMessage}`, {
         position: "top-right",
         autoClose: 4000,
         hideProgressBar: false,
@@ -254,13 +257,13 @@ const EditExpense = () => {
     }
   };
 
-  const handleCancel = () => {
-    navigate("/expenses");
-  };
-
   if (loading) {
     return (
-      <Container fluid className="p-4 bg-light">
+      <Container
+        fluid
+        className="p-4"
+        style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+      >
         <ToastContainer
           position="top-right"
           autoClose={3000}
@@ -276,7 +279,7 @@ const EditExpense = () => {
         />
         <div className="text-center py-5">
           <Spinner animation="border" variant="secondary" size="lg" />
-          <h5 className="mt-3">Loading expense details...</h5>
+          <h5 className="mt-3 text-muted">Loading expense data...</h5>
         </div>
       </Container>
     );
@@ -284,7 +287,11 @@ const EditExpense = () => {
 
   if (error) {
     return (
-      <Container fluid className="p-4 bg-light">
+      <Container
+        fluid
+        className="p-4"
+        style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+      >
         <ToastContainer
           position="top-right"
           autoClose={3000}
@@ -299,8 +306,8 @@ const EditExpense = () => {
           transition={Bounce}
         />
         <Alert variant="secondary" className="text-center">
-          <h5>Error Loading Expense</h5>
-          <p>{error}</p>
+          <h4>Expense not found</h4>
+          <p>The expense you're looking for doesn't exist.</p>
           <Button variant="secondary" onClick={() => navigate("/expenses")}>
             Back to Expenses
           </Button>
@@ -310,7 +317,11 @@ const EditExpense = () => {
   }
 
   return (
-    <Container fluid className="p-4 bg-light">
+    <Container
+      fluid
+      className="px-4 py-3"
+      style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}
+    >
       <ToastContainer
         position="top-right"
         autoClose={3000}
@@ -325,81 +336,68 @@ const EditExpense = () => {
         transition={Bounce}
       />
 
-      {/* Back Button */}
-      <div className="mb-3 d-flex align-items-center gap-3">
-        <Button
-          variant="link"
-          className="text-decoration-none p-0 d-flex align-items-center text-secondary"
-          onClick={() => navigate("/expenses")}
-        >
-          <FaArrowLeft className="me-2" /> Back to Expenses
-        </Button>
-        <Button
-          variant="outline-secondary"
-          size="sm"
-          className="rounded-pill"
-          onClick={() => navigate("/expenses")}
-        >
-          <FaHome className="me-1" /> Expenses
-        </Button>
-      </div>
+      <Form onSubmit={handleSubmit}>
+        <Card className="border-0 shadow-sm rounded-3">
+          <Card.Header className="bg-white border-0 pt-3 px-4">
+            <div className="d-flex gap-2 border-bottom pb-2">
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setActiveTab("expense")}
+                className={`fw-semibold text-decoration-none px-3 py-2 rounded-3 ${activeTab === "expense" ? "bg-light" : ""}`}
+                style={{
+                  color:
+                    activeTab === "expense" ? "rgb(30, 58, 111)" : "#6c757d",
+                }}
+              >
+                <FaMoneyBillWave className="me-2" /> Expense Details
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setActiveTab("tax")}
+                className={`fw-semibold text-decoration-none px-3 py-2 rounded-3 ${activeTab === "tax" ? "bg-light" : ""}`}
+                style={{
+                  color: activeTab === "tax" ? "rgb(30, 58, 111)" : "#6c757d",
+                }}
+              >
+                <FaPercent className="me-2" /> Tax Information
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setActiveTab("payment")}
+                className={`fw-semibold text-decoration-none px-3 py-2 rounded-3 ${activeTab === "payment" ? "bg-light" : ""}`}
+                style={{
+                  color:
+                    activeTab === "payment" ? "rgb(30, 58, 111)" : "#6c757d",
+                }}
+              >
+                <FaCreditCard className="me-2" /> Payment Information
+              </Button>
+            </div>
+          </Card.Header>
 
-      {/* Header */}
-      <div
-        className="bg-secondary text-white rounded-3 p-4 mb-4 shadow"
-        style={{ backgroundColor: "#6c757d" }}
-      >
-        <div className="d-flex justify-content-between align-items-center">
-          <div>
-            <h2 className="fw-bold mb-1">
-              <FaMoneyBillWave className="me-2" /> Edit Expense
-            </h2>
-            <p className="mb-0 opacity-75">Update expense details</p>
-          </div>
-          <div className="bg-secondary bg-opacity-20 rounded-circle p-3">
-            <FaMoneyBillWave size={28} className="text-white" />
-          </div>
-        </div>
-      </div>
-
-      <Row className="justify-content-center">
-        <Col lg={8}>
-          <Card className="border-0 shadow-sm rounded-3">
-            <Card.Body className="p-4">
-              {/* Reference Number Display */}
-              <div className="bg-light p-3 rounded-3 mb-4">
-                <Row>
+          <Card.Body className="p-4">
+            {/* Expense Details Tab */}
+            {activeTab === "expense" && (
+              <div>
+                <h6
+                  className="fw-bold mb-3"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaTag className="me-2" /> Basic Information
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
                   <Col md={6}>
-                    <small className="text-muted">Reference Number</small>
-                    <div className="fw-bold text-secondary">
-                      <FaFileInvoice className="me-2" />
-                      {formData.reference_no}
-                    </div>
-                  </Col>
-                  <Col md={6}>
-                    <small className="text-muted">Created By</small>
-                    <div className="fw-semibold">
-                      <FaUser className="me-2" />
-                      {formData.created_by}
-                    </div>
-                  </Col>
-                </Row>
-              </div>
-
-              <Form onSubmit={handleSubmit}>
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-semibold">
-                        <FaTag className="me-1" /> Category{" "}
-                        <span className="text-danger">*</span>
-                      </Form.Label>
+                    <Form.Group>
+                      <Form.Label>Category *</Form.Label>
                       <Form.Select
                         name="category"
                         value={formData.category}
                         onChange={handleChange}
                         isInvalid={!!formErrors.category}
-                        className="rounded-2"
                       >
                         <option value="">Select Category</option>
                         <option value="Rent">Rent</option>
@@ -416,16 +414,17 @@ const EditExpense = () => {
                         <option value="Training">Training</option>
                         <option value="Other">Other</option>
                       </Form.Select>
-                      <Form.Control.Feedback type="invalid">
-                        {formErrors.category}
-                      </Form.Control.Feedback>
+                      {formErrors.category && (
+                        <Form.Text className="text-danger">
+                          {formErrors.category}
+                        </Form.Text>
+                      )}
                     </Form.Group>
                   </Col>
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-semibold">
-                        <FaCalendarAlt className="me-1" /> Expense Date{" "}
-                        <span className="text-danger">*</span>
+                    <Form.Group>
+                      <Form.Label>
+                        <FaCalendarAlt className="me-1" /> Expense Date *
                       </Form.Label>
                       <Form.Control
                         type="date"
@@ -434,35 +433,51 @@ const EditExpense = () => {
                         onChange={handleChange}
                         isInvalid={!!formErrors.expense_date}
                         max={new Date().toISOString().split("T")[0]}
-                        className="rounded-2"
                       />
-                      <Form.Control.Feedback type="invalid">
-                        {formErrors.expense_date}
-                      </Form.Control.Feedback>
+                      {formErrors.expense_date && (
+                        <Form.Text className="text-danger">
+                          {formErrors.expense_date}
+                        </Form.Text>
+                      )}
                     </Form.Group>
                   </Col>
                 </Row>
 
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-semibold">Description</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={3}
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    placeholder="Describe the expense"
-                    className="rounded-2"
-                  />
-                </Form.Group>
+                <Row className="g-3">
+                  <Col md={12}>
+                    <Form.Group>
+                      <Form.Label>Description</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={4}
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                        placeholder="Describe the expense"
+                      />
+                      <Form.Text className="text-muted">
+                        Provide additional details about this expense
+                      </Form.Text>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+            )}
 
-                <Row>
+            {/* Tax Information Tab */}
+            {activeTab === "tax" && (
+              <div>
+                <h6
+                  className="fw-bold mb-3"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaPercent className="me-2" /> Tax Calculation
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3 mb-4">
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-semibold">
-                        <FaMoneyBillWave className="me-1" /> Amount (₹){" "}
-                        <span className="text-danger">*</span>
-                      </Form.Label>
+                    <Form.Group>
+                      <Form.Label>Amount (₹) *</Form.Label>
                       <Form.Control
                         type="number"
                         name="amount"
@@ -472,23 +487,21 @@ const EditExpense = () => {
                         step="0.01"
                         min="0.01"
                         isInvalid={!!formErrors.amount}
-                        className="rounded-2"
                       />
-                      <Form.Control.Feedback type="invalid">
-                        {formErrors.amount}
-                      </Form.Control.Feedback>
+                      {formErrors.amount && (
+                        <Form.Text className="text-danger">
+                          {formErrors.amount}
+                        </Form.Text>
+                      )}
                     </Form.Group>
                   </Col>
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-semibold">
-                        <FaPercent className="me-1" /> GST Rate (%)
-                      </Form.Label>
+                    <Form.Group>
+                      <Form.Label>GST Rate (%)</Form.Label>
                       <Form.Select
                         name="gst"
                         value={formData.gst}
                         onChange={handleChange}
-                        className="rounded-2"
                       >
                         <option value="0">0% (No GST)</option>
                         <option value="5">5% (Essential Goods)</option>
@@ -500,54 +513,38 @@ const EditExpense = () => {
                   </Col>
                 </Row>
 
-                <Row>
+                <h6
+                  className="fw-bold mb-3 mt-4"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaInfoCircle className="me-2" /> Tax Summary
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3">
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-semibold">
-                        <FaPercent className="me-1" /> Tax Amount (₹)
-                      </Form.Label>
+                    <Form.Group>
+                      <Form.Label>Tax Amount (₹)</Form.Label>
                       <Form.Control
                         type="text"
                         name="tax_amount"
                         value={formData.tax_amount}
                         readOnly
                         disabled
-                        className="bg-light rounded-2"
+                        className="bg-light"
                       />
                     </Form.Group>
                   </Col>
                   <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-semibold">
-                        <FaMoneyBillWave className="me-1" /> Total Amount (₹)
-                      </Form.Label>
+                    <Form.Group>
+                      <Form.Label>Total Amount (₹)</Form.Label>
                       <Form.Control
                         type="text"
                         name="total_amount"
                         value={formData.total_amount}
                         readOnly
                         disabled
-                        className="bg-light text-black fw-bold rounded-2"
+                        className="bg-light text-primary fw-bold"
                       />
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-semibold">
-                        <FaCheckCircle className="me-1" /> Payment Status
-                      </Form.Label>
-                      <Form.Select
-                        name="payment_status"
-                        value={formData.payment_status}
-                        onChange={handleChange}
-                        className="rounded-2"
-                      >
-                        <option value="Paid">Paid</option>
-                        <option value="Pending">Pending</option>
-                      </Form.Select>
                     </Form.Group>
                   </Col>
                 </Row>
@@ -555,7 +552,7 @@ const EditExpense = () => {
                 {parseFloat(formData.gst) > 0 &&
                   formData.amount &&
                   parseFloat(formData.amount) > 0 && (
-                    <Alert variant="info" className="mt-3 rounded-3">
+                    <Alert variant="info" className="mt-4 rounded-3">
                       <small>
                         <strong>Tax Calculation Summary:</strong>
                         <br />• Amount: ₹
@@ -579,44 +576,118 @@ const EditExpense = () => {
                       </small>
                     </Alert>
                   )}
+              </div>
+            )}
 
-                {/* Action Buttons */}
-                <div className="d-flex justify-content-end gap-3 mt-4">
-                  <Button
-                    variant="secondary"
-                    type="submit"
-                    disabled={submitting}
-                    className="rounded-pill px-4"
-                    style={{ backgroundColor: "#6c757d", border: "none" }}
-                  >
-                    {submitting ? (
-                      <>
-                        <Spinner
-                          animation="border"
-                          size="sm"
-                          className="me-2"
-                        />
-                        Updating...
-                      </>
-                    ) : (
-                      <>
-                        <FaSave className="me-2" /> Update Expense
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </Form>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+            {/* Payment Information Tab */}
+            {activeTab === "payment" && (
+              <div>
+                <h6
+                  className="fw-bold mb-3"
+                  style={{ color: "rgb(30, 58, 111)" }}
+                >
+                  <FaCreditCard className="me-2" /> Payment Details
+                </h6>
+                <hr className="mt-0 mb-3" />
+                <Row className="g-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>
+                        <FaCheckCircle className="me-1" /> Payment Status
+                      </Form.Label>
+                      <Form.Select
+                        name="payment_status"
+                        value={formData.payment_status}
+                        onChange={handleChange}
+                      >
+                        <option value="Paid">Paid</option>
+                        <option value="Pending">Pending</option>
+                      </Form.Select>
+                      <Form.Text className="text-muted">
+                        Select whether this expense has been paid or pending
+                      </Form.Text>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>
+                        <FaInfoCircle className="me-1" /> Confirmation
+                      </Form.Label>
+                      <Alert variant="success" className="mt-1 p-3 rounded-3">
+                        <small>
+                          <strong>Ready to Update?</strong>
+                          <br />
+                          Please review all the expense details before updating.
+                          <br />
+                          You can edit the expense again later if needed.
+                        </small>
+                      </Alert>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+            )}
+          </Card.Body>
+
+          {/* Action Buttons inside Card Footer */}
+          <Card.Footer className="bg-white border-top-0 pb-4 px-4">
+            <div className="d-flex justify-content-between gap-3">
+              <Button
+                onClick={() => navigate("/expenses")}
+                style={{
+                  backgroundColor: "#6c757d",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#fff",
+                }}
+              >
+                <FaTimes size={14} /> Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  backgroundColor: "rgb(30, 58, 111)",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
+                }}
+              >
+                {submitting ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <FaSave className="me-2" /> Update Expense
+                  </>
+                )}
+              </Button>
+            </div>
+          </Card.Footer>
+        </Card>
+      </Form>
 
       <style>{`
-        .bg-gradient-primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
         .rounded-3 {
-          border-radius: 0.75rem !important;
+          border-radius: 12px !important;
+        }
+        .bg-light {
+          background-color: #f8f9fa !important;
         }
       `}</style>
     </Container>

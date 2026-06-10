@@ -10,6 +10,10 @@ import {
   Spinner,
   Table,
   Badge,
+  OverlayTrigger,
+  Tooltip,
+  Tab,
+  Nav,
 } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -27,6 +31,11 @@ import {
   FaBox,
   FaBuilding,
   FaPercent,
+  FaInfoCircle,
+  FaCheckCircle,
+  FaExclamationTriangle,
+  FaCreditCard,
+  FaTag,
 } from "react-icons/fa";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -35,11 +44,110 @@ import { getCustomers } from "../../api/tenant/customer.api";
 import { getDealers } from "../../api/tenant/dealer.api";
 import { getProducts } from "../../api/tenant/inventory.api";
 
+// Order Status Flow Configuration - Gas Agency
+const ORDER_STATUS_FLOW = {
+  pending: {
+    label: "Pending",
+    description: "Order has been created but not yet confirmed",
+    color: "#ffc107",
+    allowedNext: ["confirmed", "cancelled"],
+  },
+  confirmed: {
+    label: "Confirmed",
+    description: "Order has been confirmed by admin",
+    color: "#17a2b8",
+    allowedNext: ["processing", "cancelled"],
+  },
+  processing: {
+    label: "Processing",
+    description: "Cylinders are being filled/refilled",
+    color: "#007bff",
+    allowedNext: ["filled", "cancelled"],
+  },
+  filled: {
+    label: "Filled",
+    description: "Cylinders have been filled, pending quality check",
+    color: "#6f42c1",
+    allowedNext: ["quality_check", "cancelled"],
+  },
+  quality_check: {
+    label: "Quality Check",
+    description: "Quality check in progress",
+    color: "#fd7e14",
+    allowedNext: ["ready_for_dispatch", "failed"],
+  },
+  ready_for_dispatch: {
+    label: "Ready for Dispatch",
+    description: "Order is ready to be dispatched",
+    color: "#20c997",
+    allowedNext: ["dispatched", "cancelled"],
+  },
+  dispatched: {
+    label: "Dispatched",
+    description: "Order has been dispatched from agency",
+    color: "#0dcaf0",
+    allowedNext: ["out_for_delivery", "cancelled"],
+  },
+  out_for_delivery: {
+    label: "Out for Delivery",
+    description: "Delivery person is on the way",
+    color: "#0d6efd",
+    allowedNext: ["delivered", "returned"],
+  },
+  delivered: {
+    label: "Delivered",
+    description: "Order has been delivered to customer",
+    color: "#198754",
+    allowedNext: ["completed", "returned"],
+  },
+  completed: {
+    label: "Completed",
+    description: "Order is successfully completed",
+    color: "#198754",
+    allowedNext: [],
+  },
+  cancelled: {
+    label: "Cancelled",
+    description: "Order has been cancelled",
+    color: "#dc3545",
+    allowedNext: [],
+  },
+  returned: {
+    label: "Returned",
+    description: "Order was returned by customer",
+    color: "#dc3545",
+    allowedNext: ["processing"],
+  },
+  failed: {
+    label: "Failed",
+    description: "Quality check failed, needs rework",
+    color: "#dc3545",
+    allowedNext: ["processing"],
+  },
+};
+
+// Helper function to check if status transition is valid
+const isValidStatusTransition = (currentStatus, newStatus) => {
+  if (currentStatus === newStatus) return true;
+  const currentConfig = ORDER_STATUS_FLOW[currentStatus];
+  if (!currentConfig) return false;
+  return currentConfig.allowedNext.includes(newStatus);
+};
+
+// Get next allowed statuses
+const getNextAllowedStatuses = (currentStatus) => {
+  const currentConfig = ORDER_STATUS_FLOW[currentStatus];
+  if (!currentConfig) return [];
+  return currentConfig.allowedNext;
+};
+
 const AddOrder = () => {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [errors, setErrors] = useState({});
+  const [statusError, setStatusError] = useState("");
+  const [activeTab, setActiveTab] = useState("order");
 
   // Data lists - Initialize as empty arrays
   const [customers, setCustomers] = useState([]);
@@ -86,6 +194,25 @@ const AddOrder = () => {
     changed_by: currentUserId,
   });
 
+  const getValidationIcon = (fieldValue, validationError) => {
+    if (!fieldValue) {
+      return <FaInfoCircle className="text-secondary ms-2" size={14} />;
+    }
+    if (!validationError) {
+      return <FaCheckCircle className="text-success ms-2" size={14} />;
+    }
+    return (
+      <OverlayTrigger
+        placement="top"
+        overlay={<Tooltip id={`tooltip-${fieldValue}`}>{validationError}</Tooltip>}
+      >
+        <span className="text-danger ms-2" style={{ cursor: "pointer" }}>
+          <FaExclamationTriangle size={14} />
+        </span>
+      </OverlayTrigger>
+    );
+  };
+
   useEffect(() => {
     loadData();
   }, [partyType]);
@@ -98,6 +225,14 @@ const AddOrder = () => {
     formData.discount_value,
     formData.shipping_charge,
   ]);
+
+  // Reset status error when status changes
+  useEffect(() => {
+    setStatusError("");
+    if (errors.status) {
+      setErrors((prev) => ({ ...prev, status: "" }));
+    }
+  }, [formData.status]);
 
   const loadData = async () => {
     setLoadingData(true);
@@ -217,11 +352,6 @@ const AddOrder = () => {
       setProducts(mappedProducts);
     } catch (error) {
       console.error("Failed to load data:", error);
-      // Swal.fire({
-      //   icon: "warning",
-      //   title: "Loading Issue",
-      //   text: "Some data couldn't be loaded. Please check your connection.",
-      // });
       toast.warning(
         "Some data couldn't be loaded. Please check your connection.",
         {
@@ -310,6 +440,58 @@ const AddOrder = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  // Handle status change with validation
+  const handleStatusChange = (e) => {
+    const newStatus = e.target.value;
+    const currentStatus = formData.status;
+
+    // For new order creation, only allow "pending" or valid initial statuses
+    if (currentStatus === "pending" && newStatus !== "pending") {
+      // Check if the new status is valid as an initial status
+      const validInitialStatuses = ["pending"];
+      
+      if (!validInitialStatuses.includes(newStatus)) {
+        setStatusError(
+          `⚠️ New orders must start with "Pending" status. ` +
+          `"${ORDER_STATUS_FLOW[newStatus]?.label}" status cannot be set directly on order creation.`
+        );
+        toast.error(`Cannot create order with "${ORDER_STATUS_FLOW[newStatus]?.label}" status. Order must start with "Pending".`, {
+          position: "top-right",
+          autoClose: 4000,
+          theme: "colored",
+          transition: Bounce,
+        });
+        return;
+      }
+    }
+
+    // Check if the transition is valid (for existing orders, but we still validate)
+    if (currentStatus !== newStatus && !isValidStatusTransition(currentStatus, newStatus)) {
+      const currentConfig = ORDER_STATUS_FLOW[currentStatus];
+      const allowedNext = getNextAllowedStatuses(currentStatus);
+      const allowedLabels = allowedNext.map(s => ORDER_STATUS_FLOW[s]?.label).join(", ");
+      
+      setStatusError(
+        `⚠️ Invalid status transition! Cannot change from "${currentConfig?.label}" to "${ORDER_STATUS_FLOW[newStatus]?.label}". ` +
+        `Allowed next statuses: ${allowedLabels || "None"}`
+      );
+      
+      toast.error(`Invalid status transition! Cannot change from ${currentConfig?.label} to ${ORDER_STATUS_FLOW[newStatus]?.label}`, {
+        position: "top-right",
+        autoClose: 4000,
+        theme: "colored",
+        transition: Bounce,
+      });
+      return;
+    }
+
+    setStatusError("");
+    setFormData((prev) => ({ ...prev, status: newStatus }));
+    if (errors.status) {
+      setErrors((prev) => ({ ...prev, status: "" }));
     }
   };
 
@@ -404,6 +586,11 @@ const AddOrder = () => {
       newErrors.customer_id = `Please select a ${partyType === "customer" ? "customer" : "dealer"}`;
     }
 
+    // ✅ ADDED: Validate order status is pending for new orders
+    if (formData.status !== "pending") {
+      newErrors.status = `Order status must be "Pending". Cannot create order with "${ORDER_STATUS_FLOW[formData.status]?.label}" status directly.`;
+    }
+
     if (!items || items.length === 0) {
       newErrors.items = "At least one item is required";
     } else {
@@ -425,7 +612,7 @@ const AddOrder = () => {
     }
 
     setErrors(newErrors);
-    // return Object.keys(newErrors).length === 0;4
+    
     if (Object.keys(newErrors).length > 0) {
       toast.error("Please fix the validation errors", {
         position: "top-right",
@@ -447,7 +634,6 @@ const AddOrder = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      // Swal.fire("Error!", "Please fill all required fields", "error");
       return;
     }
 
@@ -492,7 +678,6 @@ const AddOrder = () => {
       console.log("Items array being sent:", itemsArray);
 
       if (itemsArray.length === 0) {
-        // Swal.fire("Error!", "Please add at least one valid item", "error");
         toast.error("Please add at least one valid item", {
           position: "top-right",
           autoClose: 3000,
@@ -537,15 +722,8 @@ const AddOrder = () => {
       const response = await createOrder(submitData);
       console.log("Order creation response:", response);
 
-      // Swal.fire({
-      //   icon: "success",
-      //   title: "Success!",
-      //   text: "Order created successfully!",
-      //   timer: 1500,
-      //   showConfirmButton: false,
-      // });
       toast.success(
-        `✅ Order created successfully! Order ID: ${response.data?.id || "N/A"} 🎉`,
+        `✅ Order created successfully! Order ID: ${response.data?.id || "N/A"} | Status: ${ORDER_STATUS_FLOW[formData.status]?.label} 🎉`,
         {
           position: "top-right",
           autoClose: 3000,
@@ -558,7 +736,6 @@ const AddOrder = () => {
         },
       );
 
-      // navigate("/orders");
       setTimeout(() => {
         navigate("/orders");
       }, 1500);
@@ -566,11 +743,6 @@ const AddOrder = () => {
       console.error("Failed to create order:", error);
       console.error("Error details:", error.response?.data);
 
-      // Swal.fire({
-      //   icon: "error",
-      //   title: "Error!",
-      //   text: error.response?.data?.message || "Failed to create order",
-      // });
       toast.error(error.response?.data?.message || "Failed to create order", {
         position: "top-right",
         autoClose: 4000,
@@ -595,216 +767,244 @@ const AddOrder = () => {
 
   if (loadingData) {
     return (
-      <Container fluid className="p-4 bg-light">
+      <Container fluid className="p-4" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
         <div className="text-center py-5">
           <Spinner animation="border" variant="secondary" size="lg" />
-          <h5 className="mt-3">Loading data...</h5>
+          <h5 className="mt-3 text-muted">Loading data...</h5>
         </div>
       </Container>
     );
   }
 
   return (
-    <Container fluid className="p-4 bg-light">
-      {/* React Toastify Container */}
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-        transition={Bounce}
-      />
-
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <Button
-            variant="link"
-            className="text-decoration-none p-0 d-flex align-items-center text-secondary mb-2"
-            onClick={() => navigate("/orders")}
-          >
-            <FaArrowLeft className="me-2" /> Back to Orders
-          </Button>
-          <h2 className="fw-bold mb-1">
-            <FaShoppingCart className="me-2 text-secondary" /> Create New Order
-          </h2>
-          <p className="text-muted">
-            Fill in the details to create a new order
-          </p>
-        </div>
-      </div>
+    <Container fluid className="px-4 py-3" style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      <ToastContainer position="top-right" autoClose={3000} theme="colored" transition={Bounce} />
 
       <Form onSubmit={handleSubmit}>
-        <Row className="g-4">
-          {/* Order Details */}
-          <Col lg={6}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaCalendarAlt className="me-2 text-secondary" /> Order
-                  Details
-                </h6>
+        <Card className="border-0 shadow-sm rounded-3">
+          <Card.Header className="bg-white border-bottom-0 pt-4 px-4">
+            <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k)}>
+              <Nav.Item>
+                <Nav.Link eventKey="order" className="fw-semibold">
+                  <FaShoppingCart className="me-2" /> Order Details
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="party" className="fw-semibold">
+                  <FaUser className="me-2" /> Party Information
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="financial" className="fw-semibold">
+                  <FaMoneyBill className="me-2" /> Financial Details
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="items" className="fw-semibold">
+                  <FaBox className="me-2" /> Order Items
+                </Nav.Link>
+              </Nav.Item>
+            </Nav>
+          </Card.Header>
 
+          <Card.Body className="p-4">
+            <Tab.Content>
+              {/* Order Details Tab */}
+              <Tab.Pane eventKey="order" active={activeTab === "order"}>
                 <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Order Date *</Form.Label>
-                      <Form.Control
-                        type="date"
-                        name="order_date"
-                        value={formData.order_date}
-                        onChange={handleChange}
-                        isInvalid={!!errors.order_date}
-                      />
-                      <Form.Control.Feedback type="invalid">
-                        {errors.order_date}
-                      </Form.Control.Feedback>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaCalendarAlt className="me-2" /> Basic Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Order Date <span className="text-danger">*</span></Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Control
+                          type="date"
+                          name="order_date"
+                          value={formData.order_date}
+                          onChange={handleChange}
+                          isInvalid={!!errors.order_date}
+                          className="flex-grow-1 rounded-2"
+                        />
+                        {getValidationIcon(formData.order_date, errors.order_date)}
+                      </div>
+                      {errors.order_date && <Form.Text className="text-danger">{errors.order_date}</Form.Text>}
                     </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Order Type</Form.Label>
-                      <Form.Select
-                        name="order_type"
-                        value={formData.order_type}
-                        onChange={handleChange}
-                      >
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Order Type</Form.Label>
+                      <Form.Select name="order_type" value={formData.order_type} onChange={handleChange} className="rounded-2">
                         <option value="sales">Sales Order</option>
                         <option value="purchase">Purchase Order</option>
                         <option value="return">Return Order</option>
                       </Form.Select>
                     </Form.Group>
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">
+                        Order Status <span className="text-danger">*</span>
+                        <small className="text-muted ms-2"><FaInfoCircle /> New orders must start with "Pending"</small>
+                      </Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Select
+                          name="status"
+                          value={formData.status}
+                          onChange={handleStatusChange}
+                          isInvalid={!!errors.status || !!statusError}
+                          className="flex-grow-1 rounded-2"
+                        >
+                          {Object.entries(ORDER_STATUS_FLOW).map(([key, config]) => (
+                            <option key={key} value={key}>{config.label}</option>
+                          ))}
+                        </Form.Select>
+                        {getValidationIcon(formData.status, errors.status || statusError)}
+                      </div>
+                      {errors.status && <Form.Text className="text-danger">{errors.status}</Form.Text>}
+                      {statusError && <Form.Text className="text-danger">{statusError}</Form.Text>}
+                      {formData.status === "pending" && !errors.status && !statusError && (
+                        <Form.Text className="text-success">✓ Valid - Orders must start with Pending status</Form.Text>
+                      )}
+                    </Form.Group>
+                  </Col>
+
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaInfoCircle className="me-2" /> Status Flow Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+                    
+                    <div className="bg-light p-3 rounded-3">
+                      <small className="text-muted d-block mb-2"><strong>Order Status Flow (Gas Agency):</strong></small>
+                      <div className="d-flex flex-wrap gap-1 align-items-center small">
+                        <span className="badge bg-warning text-dark">Pending</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-info">Confirmed</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-primary">Processing</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-secondary">Filled</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-warning text-dark">Quality Check</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-success">Ready for Dispatch</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-info">Dispatched</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-primary">Out for Delivery</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-success">Delivered</span>
+                        <span className="text-muted">→</span>
+                        <span className="badge bg-success">Completed</span>
+                      </div>
+                      <small className="text-muted mt-2 d-block">Note: Orders can only be created with "Pending" status</small>
+                    </div>
+
+                    <Alert variant="success" className="mt-4 rounded-3">
+                      <FaCheckCircle className="me-2" />
+                      <small>
+                        <strong>Ready to Submit?</strong>
+                        <br />
+                        Please review all order details before submitting.
+                        <br />
+                        You can edit the order later if needed.
+                      </small>
+                    </Alert>
                   </Col>
                 </Row>
+              </Tab.Pane>
 
+              {/* Party Information Tab */}
+              <Tab.Pane eventKey="party" active={activeTab === "party"}>
                 <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Order Status</Form.Label>
-                      <Form.Select
-                        name="status"
-                        value={formData.status}
-                        onChange={handleChange}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="processing">Processing</option>
-                        <option value="shipped">Shipped</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </Form.Select>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaUser className="me-2" /> Select Party Type
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Party Type *</Form.Label>
+                      <div className="d-flex gap-3">
+                        <Button
+                          type="button"
+                          variant={partyType === "customer" ? "secondary" : "outline-secondary"}
+                          onClick={() => handlePartyTypeChange("customer")}
+                          size="sm"
+                          className="rounded-pill"
+                        >
+                          Customer
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={partyType === "dealer" ? "secondary" : "outline-secondary"}
+                          onClick={() => handlePartyTypeChange("dealer")}
+                          size="sm"
+                          className="rounded-pill"
+                        >
+                          Dealer
+                        </Button>
+                      </div>
+                    </Form.Group>
+                  </Col>
+
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaBuilding className="me-2" /> Select Party
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">
+                        Select {partyType === "customer" ? "Customer" : "Dealer"} <span className="text-danger">*</span>
+                      </Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Select
+                          name="customer_id"
+                          value={formData.customer_id}
+                          onChange={handleChange}
+                          isInvalid={!!errors.customer_id}
+                          className="flex-grow-1 rounded-2"
+                        >
+                          <option value="">Select {partyType === "customer" ? "Customer" : "Dealer"}</option>
+                          {(partyType === "customer" ? customers : dealers).map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name || item.company_name || item.first_name}
+                            </option>
+                          ))}
+                        </Form.Select>
+                        {getValidationIcon(formData.customer_id, errors.customer_id)}
+                      </div>
+                      {errors.customer_id && <Form.Text className="text-danger">{errors.customer_id}</Form.Text>}
                     </Form.Group>
                   </Col>
                 </Row>
-              </Card.Body>
-            </Card>
+              </Tab.Pane>
 
-            {/* Party Information */}
-            <Card className="border-0 shadow-sm rounded-3 mt-4">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaUser className="me-2 text-secondary" /> Party Information
-                </h6>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Select Party Type *</Form.Label>
-                  <div className="d-flex gap-3">
-                    <Button
-                      type="button"
-                      variant={
-                        partyType === "customer"
-                          ? "secondary"
-                          : "outline-secondary"
-                      }
-                      onClick={() => handlePartyTypeChange("customer")}
-                      size="sm"
-                    >
-                      Customer
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={
-                        partyType === "dealer"
-                          ? "secondary"
-                          : "outline-secondary"
-                      }
-                      onClick={() => handlePartyTypeChange("dealer")}
-                      size="sm"
-                    >
-                      Dealer
-                    </Button>
-                  </div>
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    Select {partyType === "customer" ? "Customer" : "Dealer"} *
-                  </Form.Label>
-                  <Form.Select
-                    name="customer_id"
-                    value={formData.customer_id}
-                    onChange={handleChange}
-                    isInvalid={!!errors.customer_id}
-                  >
-                    <option value="">
-                      Select {partyType === "customer" ? "Customer" : "Dealer"}
-                    </option>
-                    {(partyType === "customer" ? customers : dealers).map(
-                      (item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name || item.company_name || item.first_name}
-                        </option>
-                      ),
-                    )}
-                  </Form.Select>
-                  <Form.Control.Feedback type="invalid">
-                    {errors.customer_id}
-                  </Form.Control.Feedback>
-                </Form.Group>
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* Financial Details */}
-          <Col lg={6}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
-                <h6 className="fw-bold mb-3">
-                  <FaMoneyBill className="me-2 text-secondary" /> Financial
-                  Details
-                </h6>
-
+              {/* Financial Details Tab */}
+              <Tab.Pane eventKey="financial" active={activeTab === "financial"}>
                 <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Payment Status</Form.Label>
-                      <Form.Select
-                        name="payment_status"
-                        value={formData.payment_status}
-                        onChange={handleChange}
-                      >
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaCreditCard className="me-2" /> Payment Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Payment Status</Form.Label>
+                      <Form.Select name="payment_status" value={formData.payment_status} onChange={handleChange} className="rounded-2">
                         <option value="pending">Pending</option>
                         <option value="paid">Paid</option>
                         <option value="partial">Partial</option>
                         <option value="refunded">Refunded</option>
                       </Form.Select>
                     </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Payment Method</Form.Label>
-                      <Form.Select
-                        name="payment_method"
-                        value={formData.payment_method}
-                        onChange={handleChange}
-                      >
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Payment Method</Form.Label>
+                      <Form.Select name="payment_method" value={formData.payment_method} onChange={handleChange} className="rounded-2">
                         <option value="">Select Method</option>
                         <option value="cash">Cash</option>
                         <option value="card">Card</option>
@@ -813,329 +1013,270 @@ const AddOrder = () => {
                       </Form.Select>
                     </Form.Group>
                   </Col>
-                </Row>
 
-                <Row>
-                  <Col md={4}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Subtotal</Form.Label>
+                  <Col lg={6}>
+                    <h6 className="fw-bold mb-3" style={{ color: "rgb(30, 58, 111)" }}>
+                      <FaTruck className="me-2" /> Shipping Information
+                    </h6>
+                    <hr className="mt-0 mb-3" />
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Delivery Address</Form.Label>
                       <Form.Control
-                        type="text"
-                        value={`₹${formData.subtotal.toFixed(2)}`}
-                        readOnly
-                        disabled
-                        className="bg-light"
+                        as="textarea"
+                        rows={3}
+                        name="delivery_address"
+                        value={formData.delivery_address}
+                        onChange={handleChange}
+                        placeholder="Enter delivery address"
+                        className="rounded-2"
                       />
                     </Form.Group>
-                  </Col>
-                  <Col md={4}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Discount Type</Form.Label>
-                      <Form.Select
-                        name="discount_type"
-                        value={formData.discount_type}
-                        onChange={handleChange}
-                      >
-                        <option value="percentage">Percentage (%)</option>
-                        <option value="fixed">Fixed Amount</option>
-                      </Form.Select>
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Delivery Date</Form.Label>
+                      <Form.Control type="date" name="delivery_date" value={formData.delivery_date} onChange={handleChange} className="rounded-2" />
                     </Form.Group>
-                  </Col>
-                  <Col md={4}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Discount Value</Form.Label>
+
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-semibold">Notes</Form.Label>
                       <Form.Control
-                        type="number"
-                        name="discount_value"
-                        value={formData.discount_value}
+                        as="textarea"
+                        rows={2}
+                        name="notes"
+                        value={formData.notes}
                         onChange={handleChange}
-                        min="0"
-                        step="0.01"
+                        placeholder="Additional notes..."
+                        className="rounded-2"
                       />
                     </Form.Group>
                   </Col>
                 </Row>
 
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Tax Amount</Form.Label>
-                      <Form.Control
-                        type="number"
-                        name="tax_amount"
-                        value={formData.tax_amount}
-                        onChange={handleChange}
-                        min="0"
-                        step="0.01"
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Shipping Charge</Form.Label>
-                      <Form.Control
-                        type="number"
-                        name="shipping_charge"
-                        value={formData.shipping_charge}
-                        onChange={handleChange}
-                        min="0"
-                        step="0.01"
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <div className="bg-light p-3 rounded-3 mb-3">
+                {/* Financial Summary */}
+                <div className="bg-light p-3 rounded-3 mt-3">
                   <Row>
-                    <Col md={6}>
-                      <h6 className="text-secondary mb-0">
-                        Discount: ₹{formData.discount_amount.toFixed(2)}
-                      </h6>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Subtotal</small>
+                      <strong>₹{formatCurrency(formData.subtotal)}</strong>
                     </Col>
-                    <Col md={6}>
-                      <h6 className="text-secondary mb-0">
-                        Total: ₹{formData.total_amount.toFixed(2)}
-                      </h6>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Discount</small>
+                      <strong className="text-danger">-₹{formatCurrency(formData.discount_amount)}</strong>
+                    </Col>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Tax Amount</small>
+                      <strong>₹{formatCurrency(formData.tax_amount)}</strong>
+                    </Col>
+                    <Col md={3}>
+                      <small className="text-muted d-block">Shipping</small>
+                      <strong>₹{formatCurrency(formData.shipping_charge)}</strong>
                     </Col>
                   </Row>
+                  <hr className="my-2" />
+                  <div className="text-end">
+                    <small className="text-muted">Grand Total:</small>
+                    <strong className="text-primary fs-5 ms-2">₹{formatCurrency(formData.total_amount)}</strong>
+                  </div>
                 </div>
+              </Tab.Pane>
 
-                <h6 className="fw-bold mb-3 mt-3">
-                  <FaTruck className="me-2 text-secondary" /> Shipping
-                  Information
-                </h6>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Delivery Address</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={2}
-                    name="delivery_address"
-                    value={formData.delivery_address}
-                    onChange={handleChange}
-                    placeholder="Enter delivery address"
-                  />
-                </Form.Group>
-
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Delivery Date</Form.Label>
-                      <Form.Control
-                        type="date"
-                        name="delivery_date"
-                        value={formData.delivery_date}
-                        onChange={handleChange}
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Notes</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={2}
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleChange}
-                    placeholder="Additional notes..."
-                  />
-                </Form.Group>
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* Order Items */}
-          <Col lg={12}>
-            <Card className="border-0 shadow-sm rounded-3">
-              <Card.Body className="p-4">
+              {/* Order Items Tab */}
+              <Tab.Pane eventKey="items" active={activeTab === "items"}>
                 <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="fw-bold mb-0">
-                    <FaBox className="me-2 text-secondary" /> Order Items
+                  <h6 className="fw-bold mb-0" style={{ color: "rgb(30, 58, 111)" }}>
+                    <FaBox className="me-2" /> Order Items
                   </h6>
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    onClick={addItem}
-                  >
-                    <FaPlus className="me-1" /> Add Item
+                  <Button variant="outline-secondary" size="sm" onClick={addItem} className="rounded-pill">
+                    <FaPlus className="me-1" size={12} /> Add Item
                   </Button>
                 </div>
+                <hr className="mt-0 mb-3" />
 
                 <div className="table-responsive">
-                  <Table bordered>
+                  <Table bordered className="mb-0" style={{ fontSize: "14px" }}>
                     <thead className="table-light">
                       <tr>
-                        <th>#</th>
+                        <th style={{ width: "40px" }}>#</th>
                         <th>Product *</th>
-                        <th style={{ width: "100px" }}>Quantity *</th>
+                        <th style={{ width: "100px" }}>Qty *</th>
                         <th style={{ width: "120px" }}>Unit Price</th>
-                        <th style={{ width: "80px" }}>Discount %</th>
+                        <th style={{ width: "80px" }}>Disc%</th>
                         <th style={{ width: "80px" }}>GST%</th>
                         <th style={{ width: "120px" }}>Total</th>
                         <th style={{ width: "50px" }}></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {items && items.length > 0 ? (
-                        items.map((item, index) => (
-                          <tr key={item.id}>
-                            <td className="text-center">{index + 1}</td>
-                            <td style={{ minWidth: "250px" }}>
-                              <Form.Select
-                                value={item.product_id}
-                                onChange={(e) =>
-                                  handleProductSelect(index, e.target.value)
-                                }
-                                isInvalid={!!errors[`item_${index}_product`]}
-                              >
-                                <option value="">Select Product</option>
-                                {products && products.length > 0 ? (
-                                  products.map((product) => (
-                                    <option key={product.id} value={product.id}>
-                                      {product.name} - ₹{product.price}
-                                    </option>
-                                  ))
-                                ) : (
-                                  <option disabled>
-                                    No products available
-                                  </option>
-                                )}
-                              </Form.Select>
-                              <Form.Control.Feedback type="invalid">
-                                {errors[`item_${index}_product`]}
-                              </Form.Control.Feedback>
-                            </td>
-                            <td>
-                              <Form.Control
-                                type="number"
-                                value={item.quantity}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    index,
-                                    "quantity",
-                                    parseInt(e.target.value) || 0,
-                                  )
-                                }
-                                min="1"
-                                isInvalid={!!errors[`item_${index}_qty`]}
-                              />
-                              <Form.Control.Feedback type="invalid">
-                                {errors[`item_${index}_qty`]}
-                              </Form.Control.Feedback>
-                            </td>
-                            <td>
-                              <Form.Control
-                                type="number"
-                                value={item.unit_price}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    index,
-                                    "unit_price",
-                                    parseFloat(e.target.value) || 0,
-                                  )
-                                }
-                                min="0"
-                                step="0.01"
-                              />
-                            </td>
-                            <td>
-                              <Form.Control
-                                type="number"
-                                value={item.discount_percent}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    index,
-                                    "discount_percent",
-                                    parseFloat(e.target.value) || 0,
-                                  )
-                                }
-                                min="0"
-                                max="100"
-                                step="0.1"
-                              />
-                            </td>
-                            <td className="text-center">
-                              <Badge bg="secondary">{item.gst_rate}%</Badge>
-                            </td>
-                            <td className="text-end fw-semibold text-secondary">
-                              ₹{formatCurrency(item.total_amount)}
-                            </td>
-                            <td className="text-center">
-                              <Button
-                                variant="outline-secondary"
-                                size="sm"
-                                onClick={() => removeItem(index)}
-                                disabled={items.length === 1}
-                              >
-                                <FaTrash />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="8" className="text-center">
-                            No items added
+                      {items.map((item, index) => (
+                        <tr key={item.id}>
+                          <td className="text-center">{index + 1}</td>
+                          <td style={{ minWidth: "250px" }}>
+                            <Form.Select
+                              value={item.product_id}
+                              onChange={(e) => handleProductSelect(index, e.target.value)}
+                              isInvalid={!!errors[`item_${index}_product`]}
+                              size="sm"
+                              className="rounded-2"
+                            >
+                              <option value="">Select Product</option>
+                              {products.map((product) => (
+                                <option key={product.id} value={product.id}>
+                                  {product.name} - ₹{product.price}
+                                </option>
+                              ))}
+                            </Form.Select>
+                            {errors[`item_${index}_product`] && <Form.Text className="text-danger">{errors[`item_${index}_product`]}</Form.Text>}
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => handleItemChange(index, "quantity", parseInt(e.target.value) || 0)}
+                              min="1"
+                              size="sm"
+                              className="rounded-2"
+                              isInvalid={!!errors[`item_${index}_qty`]}
+                            />
+                            {errors[`item_${index}_qty`] && <Form.Text className="text-danger">{errors[`item_${index}_qty`]}</Form.Text>}
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="number"
+                              value={item.unit_price}
+                              onChange={(e) => handleItemChange(index, "unit_price", parseFloat(e.target.value) || 0)}
+                              min="0"
+                              step="0.01"
+                              size="sm"
+                              className="rounded-2"
+                            />
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="number"
+                              value={item.discount_percent}
+                              onChange={(e) => handleItemChange(index, "discount_percent", parseFloat(e.target.value) || 0)}
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              size="sm"
+                              className="rounded-2"
+                            />
+                          </td>
+                          <td className="text-center">
+                            <span className="badge bg-secondary px-3 py-2 rounded-pill">{item.gst_rate}%</span>
+                          </td>
+                          <td className="text-end fw-semibold">₹{formatCurrency(item.total_amount)}</td>
+                          <td className="text-center">
+                            <Button variant="outline-secondary" size="sm" onClick={() => removeItem(index)} disabled={items.length === 1} className="rounded-circle" style={{ width: "32px", height: "32px", padding: "0" }}>
+                              <FaTrash size={12} />
+                            </Button>
                           </td>
                         </tr>
-                      )}
+                      ))}
                     </tbody>
                     <tfoot className="table-light">
-                      <tr className="table-secondary">
-                        <td colSpan="6" className="text-end fw-bold">
-                          Grand Total:
-                        </td>
-                        <td className="text-end fw-bold text-secondary fs-5">
-                          ₹{formatCurrency(formData.total_amount)}
-                        </td>
-                        <td></td>
-                      </tr>
+                      <tr className="table-active">
+                        <td colSpan="6" className="text-end fw-bold">Grand Total:</td>
+                        <td colSpan="2" className="text-end fw-bold text-primary fs-5">₹{formatCurrency(formData.total_amount)}</td>
+                       </tr>
                     </tfoot>
                   </Table>
                 </div>
-                {errors.items && (
-                  <small className="text-danger">{errors.items}</small>
-                )}
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+                {errors.items && <small className="text-danger">{errors.items}</small>}
+              </Tab.Pane>
+            </Tab.Content>
+          </Card.Body>
 
-        {/* Action Buttons */}
-        <div className="d-flex justify-content-end gap-3 mt-4">
-          {/* <Button
-            variant="secondary"
-            onClick={() => navigate("/orders")}
-            className="rounded-pill px-4"
-            disabled={submitting}
-          >
-            <FaTimes className="me-2" /> Cancel
-          </Button> */}
-          <Button
-            variant="secondary"
-            type="submit"
-            disabled={submitting}
-            className="rounded-pill px-4"
-          >
-            {submitting ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <FaSave className="me-2" /> Submit
-              </>
-            )}
-          </Button>
-        </div>
+          {/* Action Buttons inside Card Footer */}
+          <Card.Footer className="bg-white border-top-0 pb-4 px-4">
+            <div className="d-flex justify-content-between gap-3">
+              <Button
+                onClick={() => navigate("/orders")}
+                style={{
+                  backgroundColor: "#6c757d",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#fff",
+                }}
+              >
+                <FaTimes size={14} /> Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  backgroundColor: "rgb(30, 58, 111)",
+                  border: "none",
+                  borderRadius: "30px",
+                  padding: "10px 28px",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 2px 6px rgba(30, 58, 111, 0.25)",
+                }}
+              >
+                {submitting ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FaSave size={14} /> Submit
+                  </>
+                )}
+              </Button>
+            </div>
+          </Card.Footer>
+        </Card>
       </Form>
 
       <style>{`
+        .nav-tabs {
+          border-bottom: 2px solid #e9ecef;
+        }
+        .nav-tabs .nav-link {
+          border: none;
+          color: #6c757d;
+          padding: 12px 20px;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+        .nav-tabs .nav-link:hover {
+          color: rgb(30, 58, 111);
+          background: transparent;
+        }
+        .nav-tabs .nav-link.active {
+          color: rgb(30, 58, 111);
+          background: transparent;
+          border-bottom: 2px solid rgb(30, 58, 111);
+        }
         .rounded-3 {
-          border-radius: 0.75rem !important;
+          border-radius: 12px !important;
+        }
+        .rounded-2 {
+          border-radius: 8px !important;
+        }
+        .form-label {
+          margin-bottom: 0.5rem;
+          font-size: 13px;
+        }
+        .form-text {
+          font-size: 11px;
+          margin-top: 0.25rem;
+        }
+        .badge {
+          font-weight: 500;
         }
       `}</style>
     </Container>

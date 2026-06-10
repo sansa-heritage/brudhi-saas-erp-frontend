@@ -10,7 +10,6 @@ import {
   Col,
   Modal,
   Alert,
-  Spinner,
 } from "react-bootstrap";
 import {
   FaPlus,
@@ -28,11 +27,11 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import {
   getRoles,
-  createRole,
+  createRole,        // Changed from addRole to createRole
   updateRole,
   deleteRole,
   getAllPermissions,
-} from "../../api/tenant/staff.api";
+} from "../../components/services/staffService";
 
 const RolePermissions = () => {
   const navigate = useNavigate();
@@ -41,10 +40,9 @@ const RolePermissions = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
-    role_id: "",
+    role_id: "",        // Added role_id field
     description: "",
     permissions: [],
     status: "active",
@@ -56,38 +54,17 @@ const RolePermissions = () => {
 
   const loadData = async () => {
     setLoading(true);
-    setError(null);
     try {
-      // Fetch roles and permissions in parallel
-      const [rolesResponse, permissionsResponse] = await Promise.all([
-        getRoles(),
-        getAllPermissions(),
-      ]);
-
-      console.log("Roles response:", rolesResponse);
-      console.log("Permissions response:", permissionsResponse);
-
-      // Extract data from response
-      let rolesData = [];
-      let permissionsData = [];
-
-      if (rolesResponse?.data?.data) rolesData = rolesResponse.data.data;
-      else if (rolesResponse?.data) rolesData = rolesResponse.data;
-      else if (Array.isArray(rolesResponse)) rolesData = rolesResponse;
-
-      if (permissionsResponse?.data?.data) permissionsData = permissionsResponse.data.data;
-      else if (permissionsResponse?.data) permissionsData = permissionsResponse.data;
-      else if (Array.isArray(permissionsResponse)) permissionsData = permissionsResponse;
-
+      const rolesData = await getRoles();
+      const permissionsData = await getAllPermissions();
       setRoles(rolesData);
       setPermissions(permissionsData);
     } catch (error) {
       console.error("Failed to load data:", error);
-      setError(error.response?.data?.message || "Failed to load roles and permissions");
       Swal.fire({
         icon: 'error',
         title: 'Error!',
-        text: error.response?.data?.message || 'Failed to load roles and permissions',
+        text: 'Failed to load roles and permissions',
       });
     } finally {
       setLoading(false);
@@ -95,17 +72,8 @@ const RolePermissions = () => {
   };
 
   const handleSave = async () => {
-    // Validation
-    if (!formData.name.trim()) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Validation Error',
-        text: 'Role name is required',
-      });
-      return;
-    }
-
     try {
+      // Prepare data matching API format
       const roleData = {
         name: formData.name,
         role_id: formData.role_id || formData.name.toUpperCase().replace(/\s/g, '_'),
@@ -124,7 +92,7 @@ const RolePermissions = () => {
           showConfirmButton: false
         });
       } else {
-        await createRole(roleData);
+        await createRole(roleData);  // Changed from addRole to createRole
         Swal.fire({
           icon: 'success',
           title: 'Success!',
@@ -151,10 +119,10 @@ const RolePermissions = () => {
   const handleEdit = (role) => {
     setSelectedRole(role);
     setFormData({
-      name: role.name || '',
+      name: role.name,
       role_id: role.role_id || '',
       description: role.description || '',
-      permissions: role.permissions?.map(p => p.id || p) || [],
+      permissions: role.permissions || [],
       status: role.status || 'active',
     });
     setShowModal(true);
@@ -164,6 +132,7 @@ const RolePermissions = () => {
     try {
       await deleteRole(id);
       await loadData();
+      setShowDeleteConfirm(null);
       Swal.fire({
         icon: 'success',
         title: 'Deleted!',
@@ -176,7 +145,7 @@ const RolePermissions = () => {
       Swal.fire({
         icon: 'error',
         title: 'Error!',
-        text: error.response?.data?.message || 'Failed to delete role',
+        text: 'Failed to delete role',
       });
     }
   };
@@ -203,7 +172,7 @@ const RolePermissions = () => {
   const getPermissionsByCategory = () => {
     const grouped = {};
     permissions.forEach((perm) => {
-      const category = perm.module || perm.category || 'General';
+      const category = perm.category || 'General';
       if (!grouped[category]) {
         grouped[category] = [];
       }
@@ -216,29 +185,18 @@ const RolePermissions = () => {
     navigate("/staffs");
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const groupedPermissions = getPermissionsByCategory();
 
   if (loading) {
     return (
       <Container fluid className="p-4 bg-light">
         <div className="text-center py-5">
-          <Spinner animation="border" variant="primary" size="lg" />
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
           <h5 className="mt-3">Loading roles and permissions...</h5>
         </div>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container fluid className="p-4 bg-light">
-        <Alert variant="danger" className="text-center">
-          <h5>Error Loading Data</h5>
-          <p>{error}</p>
-          <Button variant="primary" onClick={loadData}>
-            Retry
-          </Button>
-        </Alert>
       </Container>
     );
   }
@@ -362,7 +320,9 @@ const RolePermissions = () => {
                 {roles.map((role) => (
                   <tr key={role.id}>
                     <td className="fw-semibold">{role.name}</td>
-                    <td><code>{role.role_id}</code></td>
+                    <td>
+                      <code>{role.role_id}</code>
+                    </td>
                     <td className="text-muted">{role.description}</td>
                     <td>
                       <Badge bg="info" className="rounded-pill">
@@ -393,21 +353,7 @@ const RolePermissions = () => {
                         size="sm"
                         className="rounded-circle"
                         style={{ width: "32px", height: "32px", padding: "0" }}
-                        onClick={() => {
-                          Swal.fire({
-                            title: 'Are you sure?',
-                            text: `Delete role "${role.name}"?`,
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#d33',
-                            cancelButtonColor: '#3085d6',
-                            confirmButtonText: 'Yes, delete it!'
-                          }).then((result) => {
-                            if (result.isConfirmed) {
-                              handleDelete(role.id);
-                            }
-                          });
-                        }}
+                        onClick={() => setShowDeleteConfirm(role.id)}
                         disabled={role.staffCount > 0}
                       >
                         <FaTrash />
@@ -519,37 +465,33 @@ const RolePermissions = () => {
               className="border rounded-3 p-3"
               style={{ maxHeight: "400px", overflowY: "auto" }}
             >
-              {Object.keys(groupedPermissions).length > 0 ? (
-                Object.keys(groupedPermissions).map((category, idx) => (
-                  <div key={category} className="mb-3">
-                    <h6 className="fw-bold text-primary mb-2">{category}</h6>
-                    <div className="ps-3">
-                      {groupedPermissions[category].map((perm) => (
-                        <Form.Check
-                          key={perm.id}
-                          type="checkbox"
-                          id={`perm-${perm.id}`}
-                          label={
-                            <span>
-                              <strong>{perm.name}</strong>
-                              <br />
-                              <small className="text-muted">
-                                {perm.description}
-                              </small>
-                            </span>
-                          }
-                          checked={formData.permissions.includes(perm.id)}
-                          onChange={() => handlePermissionToggle(perm.id)}
-                          className="mb-2"
-                        />
-                      ))}
-                    </div>
-                    {idx !== Object.keys(groupedPermissions).length - 1 && <hr />}
+              {Object.keys(groupedPermissions).map((category, idx) => (
+                <div key={category} className="mb-3">
+                  <h6 className="fw-bold text-primary mb-2">{category}</h6>
+                  <div className="ps-3">
+                    {groupedPermissions[category].map((perm) => (
+                      <Form.Check
+                        key={perm.id}
+                        type="checkbox"
+                        id={`perm-${perm.id}`}
+                        label={
+                          <span>
+                            <strong>{perm.name}</strong>
+                            <br />
+                            <small className="text-muted">
+                              {perm.description}
+                            </small>
+                          </span>
+                        }
+                        checked={formData.permissions.includes(perm.id)}
+                        onChange={() => handlePermissionToggle(perm.id)}
+                        className="mb-2"
+                      />
+                    ))}
                   </div>
-                ))
-              ) : (
-                <p className="text-muted text-center">No permissions available</p>
-              )}
+                  {idx !== Object.keys(groupedPermissions).length - 1 && <hr />}
+                </div>
+              ))}
             </div>
           </Form>
         </Modal.Body>
@@ -571,6 +513,40 @@ const RolePermissions = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{ background: "rgba(0,0,0,0.5)", zIndex: 9999 }}
+        >
+          <Card style={{ width: "400px" }} className="rounded-3">
+            <Card.Body className="p-4">
+              <h5 className="mb-3">Confirm Delete</h5>
+              <p>
+                Are you sure you want to delete this role? This action cannot be
+                undone.
+              </p>
+              <div className="d-flex justify-content-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="rounded-pill px-3"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => handleDelete(showDeleteConfirm)}
+                  className="rounded-pill px-3"
+                >
+                  Delete
+                </Button>
+              </div>
+            </Card.Body>
+          </Card>
+        </div>
+      )}
 
       <style>{`
         .bg-gradient-primary {
